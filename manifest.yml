@@ -1,0 +1,55 @@
+name: extend-detections-page
+description: Adds third-party data to Next-Gen SIEM incident details
+logo: ""
+manifest_version: "2023-05-09"
+ignored:
+  - ui/(extensions|pages)/[^\/]*?/public
+  - ui/(extensions|pages)/[^\/]*?/index.html
+  - ui/(extensions|pages)/[^\/]*?/favicon.ico
+  - ui/(extensions|pages)/.*?/node_modules
+  - ui/(extensions|pages)/.*?/config
+  - ui/(extensions|pages)/.*?/\.gitignore
+  - ui/(extensions|pages)/.*?/package\.json
+  - ui/(extensions|pages)/.*?/tsconfig\.json
+  - ui/(extensions|pages)/.*?/tsconfig\..*\.json
+  - ui/(extensions|pages)/.*?/.*?\.(md|log|lock|cjs)
+ui:
+  homepage: ""
+  extensions:
+    - name: Third-party Detections
+      description: Adds third-party data to Next-Gen SIEM incident details
+      path: ui/extensions/Third-party Detections/src/dist
+      entrypoint: ui/extensions/Third-party Detections/src/dist/index.html
+      sockets:
+        - xdr.detections.panel
+      content_security_policy:
+        connect-src:
+          - self
+          - 'data:'
+        style-src: []
+        style-src-elem: []
+        script-src: []
+        form-action: []
+        img-src:
+          - self
+          - 'data:'
+        media-src: []
+        object-src: []
+      permissions: []
+  pages: {}
+  dashboards: {}
+  navigation: {}
+api_integrations:
+  - name: JSONPlaceholder
+    description: JSONPlaceholder API integration
+    path: api-integrations/swagger.json
+rtr_scripts: []
+collections: []
+auth:
+  scopes: []
+  permissions: {}
+  roles: []
+functions: []
+workflows: []
+logscale:
+  saved_searches: []

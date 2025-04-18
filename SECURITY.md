@@ -1,6 +1,6 @@
 # Security Policy
 
-This document outlines security policy and procedures for the CrowdStrike `foundry-tutorial-fusion-soar` project.
+This document outlines security policy and procedures for the CrowdStrike `foundry-tutorial-encrich-incidents` project.
 
 + [Reporting a potential security vulnerability](#reporting-a-potential-security-vulnerability)
 + [Disclosure and Mitigation Process](#disclosure-and-mitigation-process)
@@ -11,8 +11,8 @@ We have multiple avenues to receive security-related vulnerability reports.
 
 Please report suspected security vulnerabilities by:
 
-+ Submitting a [bug](https://github.com/CrowdStrike/foundry-tutorial-fusion-soar).
-+ Submitting a [pull request](https://github.com/CrowdStrike/foundry-tutorial-fusion-soar/pulls) to potentially resolve the issue.
++ Submitting a [bug](https://github.com/CrowdStrike/foundry-tutorial-encrich-incidents).
++ Submitting a [pull request](https://github.com/CrowdStrike/foundry-tutorial-encrich-incidents/pulls) to potentially resolve the issue.
 + Sending an email to __oss-security@crowdstrike.com__.
 
 ## Disclosure and mitigation process
@@ -28,4 +28,4 @@ Upon receiving a security bug report, the issue will be assigned to one of the p
 
 ## Comments
 
-If you have suggestions on how this process could be improved, please let us know by [starting a new discussion](https://github.com/CrowdStrike/foundry-tutorial-fusion-soar/discussions).
+If you have suggestions on how this process could be improved, please let us know by [creating a new issue](https://github.com/CrowdStrike/foundry-tutorial-encrich-incidents/issues).

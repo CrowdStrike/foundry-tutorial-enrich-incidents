@@ -1,0 +1,24 @@
+name: Tutorial CI
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      APP_DIR: ui/extensions/Third-party Detections
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: ${{ env.APP_DIR }}/package-lock.json
+      - name: Run npm ci
+        run: npm ci
+        working-directory: ${{ env.APP_DIR }}
+      - name: Build React app
+        run: npm ci
+        working-directory: ${{ env.APP_DIR }}

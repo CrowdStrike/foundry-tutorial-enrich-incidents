@@ -5,6 +5,9 @@
 
 # Enrich Incidents tutorial Foundry app
 
+> [!IMPORTANT]  
+> To view this tutorial and import the app, you need access to the Falcon console.
+
 This code is the result of doing the Falcon Foundry [Create an App that Enriches Falcon Incidents](https://falcon.crowdstrike.com/documentation/page/h3b99cc8/create-an-app-that-enriches-falcon-detections) tutorial.
 
 ## Prerequisites

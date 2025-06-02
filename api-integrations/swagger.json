@@ -1,45 +1,75 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "JSON Placeholder",
-    "description": "Free fake API for testing and prototyping.",
-    "version": "0.1.0"
-  },
-  "externalDocs": {
-    "description": "JSON Placeholder's guide",
-    "url": "https://jsonplaceholder.typicode.com/guide"
-  },
-  "servers": [
-    {
-      "url": "https://jsonplaceholder.typicode.com",
-      "description": "JSON Placeholder"
+  "components": {
+    "schemas": {
+      "post": {
+        "properties": {
+          "body": {
+            "description": "Body of the post",
+            "type": "string"
+          },
+          "id": {
+            "description": "ID of the post",
+            "type": "number"
+          },
+          "title": {
+            "description": "Title of the post",
+            "type": "string"
+          },
+          "userId": {
+            "description": "ID of the user who created the post",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      }
     }
-  ],
+  },
+  "info": {
+    "contact": {
+      "email": "matt.raible@crowdstrike.com"
+    },
+    "description": "Free fake API for testing and prototyping.",
+    "title": "JSONPlaceholder",
+    "version": ""
+  },
+  "openapi": "3.0.3",
   "paths": {
     "/posts": {
       "get": {
-        "tags": [
-          "posts"
-        ],
-        "summary": "Returns all posts",
+        "operationId": "GET__posts",
         "responses": {
           "200": {
-            "description": "All went well",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/post"
+                  "description": "This generated schema may need tweaking. In particular format fields are attempts at matching workflow field types but may not be correct.",
+                  "items": {
+                    "properties": {
+                      "body": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
                 }
               }
-            }
+            },
+            "description": "All went well"
           }
         }
       },
       "post": {
-        "tags": [
-          "posts"
-        ],
-        "summary": "Create a new post",
+        "operationId": "POST__posts",
         "requestBody": {
           "content": {
             "application/json": {
@@ -52,64 +82,83 @@
         },
         "responses": {
           "200": {
-            "description": "A post was created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/post"
                 }
               }
-            }
+            },
+            "description": "A post was created"
           }
         }
       }
     },
     "/posts/{id}": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "description": "ID of the post",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "get": {
-        "tags": [
-          "post"
-        ],
-        "summary": "Get a single post",
+      "delete": {
+        "operationId": "DELETE__posts_id",
         "responses": {
           "200": {
-            "description": "All went well",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "All went well"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Post not found"
+          }
+        }
+      },
+      "get": {
+        "operationId": "GET__posts_id",
+        "responses": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/post"
                 }
               }
-            }
+            },
+            "description": "All went well"
           },
           "404": {
-            "description": "Post not found",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {}
+                  "type": "object"
                 }
               }
-            }
+            },
+            "description": "Post not found"
           }
         }
       },
       "put": {
-        "tags": [
-          "post"
+        "operationId": "PUT__posts_id",
+        "parameters": [
+          {
+            "description": "ID of the post",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "ID of the post",
+              "type": "string"
+            }
+          }
         ],
-        "summary": "Update a post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -122,83 +171,33 @@
         },
         "responses": {
           "200": {
-            "description": "All went well",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/post"
                 }
               }
-            }
+            },
+            "description": "All went well"
           },
           "404": {
-            "description": "Post not found",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {}
+                  "type": "object"
                 }
               }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "post"
-        ],
-        "summary": "Delete a post",
-        "responses": {
-          "200": {
-            "description": "All went well",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {}
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Post not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {}
-                }
-              }
-            }
+            },
+            "description": "Post not found"
           }
         }
       }
     }
   },
-  "components": {
-    "schemas": {
-      "post": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "number",
-            "description": "ID of the post"
-          },
-          "title": {
-            "type": "string",
-            "description": "Title of the post"
-          },
-          "body": {
-            "type": "string",
-            "description": "Body of the post"
-          },
-          "userId": {
-            "type": "number",
-            "description": "ID of the user who created the post"
-          }
-        }
-      }
+  "servers": [
+    {
+      "url": "https://jsonplaceholder.typicode.com"
     }
-  }
+  ],
+  "x-cs-multi-instance": true
 }

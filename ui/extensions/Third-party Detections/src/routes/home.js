@@ -12,7 +12,7 @@ function Home() {
     async function fetchData() {
       try {
         const apiIntegration = falcon.apiIntegration({
-          definitionId: '6afd658618c8400eb5136d4fb019b527',
+          definitionId: 'JSONPlaceholder',
           operationId: 'GET__posts'
         });
         const response = await apiIntegration.execute();

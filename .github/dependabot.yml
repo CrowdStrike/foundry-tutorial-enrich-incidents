@@ -1,9 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "ui/extensions/Third-party Detections"
-    schedule:
-      interval: "weekly"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

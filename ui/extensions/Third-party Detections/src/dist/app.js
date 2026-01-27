@@ -2806,52 +2806,47 @@ function requireReactDom () {
 	return reactDom.exports;
 }
 
-// Unique ID creation requires a high quality random # generator. In the browser we therefore
-// require the crypto API and do not support built-in fallback to lower quality random number
-// generators (like Math.random()).
-let getRandomValues;
-const rnds8 = new Uint8Array(16);
-function rng() {
-  // lazy load so that environments that need to polyfill have a chance to do so
-  if (!getRandomValues) {
-    // getRandomValues needs to be invoked in a context where "this" is a Crypto implementation.
-    getRandomValues = typeof crypto !== 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto);
-    if (!getRandomValues) {
-      throw new Error('crypto.getRandomValues() not supported. See https://github.com/uuidjs/uuid#getrandomvalues-not-supported');
-    }
-  }
-  return getRandomValues(rnds8);
+var REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/i;
+function validate(uuid) {
+  return typeof uuid === 'string' && REGEX.test(uuid);
 }
-
-/**
- * Convert array of 16 byte values to UUID string format of the form:
- * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
- */
-
 const byteToHex = [];
 for (let i = 0; i < 256; ++i) {
   byteToHex.push((i + 0x100).toString(16).slice(1));
 }
 function unsafeStringify(arr, offset = 0) {
-  // Note: Be careful editing this code!  It's been tuned for performance
-  // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
-  return byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]];
+  return (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase();
+}
+let getRandomValues;
+const rnds8 = new Uint8Array(16);
+function rng() {
+  if (!getRandomValues) {
+    if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+      throw new Error('crypto.getRandomValues() not supported. See https://github.com/uuidjs/uuid#getrandomvalues-not-supported');
+    }
+    getRandomValues = crypto.getRandomValues.bind(crypto);
+  }
+  return getRandomValues(rnds8);
 }
 const randomUUID = typeof crypto !== 'undefined' && crypto.randomUUID && crypto.randomUUID.bind(crypto);
 var native = {
   randomUUID
 };
+function _v4(options, buf, offset) {
+  options = options || {};
+  const rnds = options.random ?? options.rng?.() ?? rng();
+  if (rnds.length < 16) {
+    throw new Error('Random bytes length must be >= 16');
+  }
+  rnds[6] = rnds[6] & 0x0f | 0x40;
+  rnds[8] = rnds[8] & 0x3f | 0x80;
+  return unsafeStringify(rnds);
+}
 function v4(options, buf, offset) {
-  if (native.randomUUID && true && !options) {
+  if (native.randomUUID && true && true) {
     return native.randomUUID();
   }
-  options = options || {};
-  const rnds = options.random || (options.rng || rng)(); // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
-
-  rnds[6] = rnds[6] & 0x0f | 0x40;
-  rnds[8] = rnds[8] & 0x3f | 0x80; // Copy bytes to buffer, if provided
-
-  return unsafeStringify(rnds);
+  return _v4(options);
 }
 const VERSION = 'current';
 function assertConnection(falcon) {
@@ -2867,6 +2862,13 @@ event) {
 const CONNECTION_TIMEOUT = 5_000;
 const API_TIMEOUT = 30_000;
 const NAVIGATION_TIMEOUT = 5_000;
+function sanitizeMessageId(messageId) {
+  // Only allow valid UUID strings
+  if (typeof messageId !== 'string' || !validate(messageId)) {
+    return null;
+  }
+  return messageId;
+}
 function timeoutForMessage(message) {
   const timeout = message.type === 'connect' ? CONNECTION_TIMEOUT : message.type === 'api' ? API_TIMEOUT : message.type === 'navigateTo' ? NAVIGATION_TIMEOUT :
   // Requests not explicitly covered above will not have a timeout. This includes 'fileUpload', which is a user interaction that can take any amount of time.
@@ -2961,12 +2963,18 @@ class Bridge {
     const {
       messageId
     } = event.data.meta;
-    const callback = this.pendingMessages.get(messageId);
-    if (!callback) {
+    // Sanitize messageId to prevent unvalidated dynamic method calls
+    const sanitizedMessageId = sanitizeMessageId(messageId);
+    if (!sanitizedMessageId) {
+      this.throwError(`Received message with invalid messageId format`);
+      return;
+    }
+    const callback = this.pendingMessages.get(sanitizedMessageId);
+    if (!callback || typeof callback !== 'function') {
       this.throwError(`Received unexpected message`);
       return;
     }
-    this.pendingMessages.delete(messageId);
+    this.pendingMessages.delete(sanitizedMessageId);
     callback(message.payload);
   };
   throwError(message) {
@@ -2988,7 +2996,7 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ***************************************************************************** */
-/* global Reflect, Promise, SuppressedError, Symbol */
+/* global Reflect, Promise, SuppressedError, Symbol, Iterator */
 
 function __decorate(decorators, target, key, desc) {
   var c = arguments.length,
@@ -3142,13 +3150,14 @@ function defaultMethodNamesOrAssert(methodNames) {
 }
 const isMetaEvent = eventName => eventName === listenerAdded || eventName === listenerRemoved;
 function emitMetaEvent(emitter, eventName, eventData) {
-  if (isMetaEvent(eventName)) {
-    try {
-      canEmitMetaEvents = true;
-      emitter.emit(eventName, eventData);
-    } finally {
-      canEmitMetaEvents = false;
-    }
+  if (!isMetaEvent(eventName)) {
+    return;
+  }
+  try {
+    canEmitMetaEvents = true;
+    emitter.emit(eventName, eventData);
+  } finally {
+    canEmitMetaEvents = false;
   }
 }
 class Emittery {
@@ -3236,7 +3245,9 @@ class Emittery {
       this.debug.logger(type, this.debug.name, eventName, eventData);
     }
   }
-  on(eventNames, listener) {
+  on(eventNames, listener, {
+    signal
+  } = {}) {
     assertListener(listener);
     eventNames = Array.isArray(eventNames) ? eventNames : [eventNames];
     for (const eventName of eventNames) {
@@ -3256,7 +3267,17 @@ class Emittery {
         });
       }
     }
-    return this.off.bind(this, eventNames, listener);
+    const off = () => {
+      this.off(eventNames, listener);
+      signal?.removeEventListener('abort', off);
+    };
+    signal?.addEventListener('abort', off, {
+      once: true
+    });
+    if (signal?.aborted) {
+      off();
+    }
+    return off;
   }
   off(eventNames, listener) {
     assertListener(listener);
@@ -3280,10 +3301,16 @@ class Emittery {
       }
     }
   }
-  once(eventNames) {
+  once(eventNames, predicate) {
+    if (predicate !== undefined && typeof predicate !== 'function') {
+      throw new TypeError('predicate must be a function');
+    }
     let off_;
     const promise = new Promise(resolve => {
       off_ = this.on(eventNames, data => {
+        if (predicate && !predicate(data)) {
+          return;
+        }
         off_();
         resolve(data);
       });
@@ -3344,14 +3371,26 @@ class Emittery {
     }
     /* eslint-enable no-await-in-loop */
   }
-  onAny(listener) {
+  onAny(listener, {
+    signal
+  } = {}) {
     assertListener(listener);
     this.logIfDebugEnabled('subscribeAny', undefined, undefined);
     anyMap.get(this).add(listener);
     emitMetaEvent(this, listenerAdded, {
       listener
     });
-    return this.offAny.bind(this, listener);
+    const offAny = () => {
+      this.offAny(listener);
+      signal?.removeEventListener('abort', offAny);
+    };
+    signal?.addEventListener('abort', offAny, {
+      once: true
+    });
+    if (signal?.aborted) {
+      offAny();
+    }
+    return offAny;
   }
   anyEvent() {
     return iterator(this);
@@ -3724,6 +3763,217 @@ class AlertsApiBridge {
  * DO NOT EDIT DIRECTLY
  *
  **/
+class CloudSecurityAssetsApiBridge {
+  bridge;
+  constructor(bridge) {
+    this.bridge = bridge;
+  }
+  getBridge() {
+    return this.bridge;
+  }
+  async getAggregatesResourcesCountByManagedByV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'cloudSecurityAssets',
+      method: 'getAggregatesResourcesCountByManagedByV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+}
+
+/**
+ *
+ * This file is autogenerated.
+ *
+ * DO NOT EDIT DIRECTLY
+ *
+ **/
+class CloudregistrationApiBridge {
+  bridge;
+  constructor(bridge) {
+    this.bridge = bridge;
+  }
+  getBridge() {
+    return this.bridge;
+  }
+  async getCloudSecurityRegistrationAwsCombinedAccountsV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'cloudregistration',
+      method: 'getCloudSecurityRegistrationAwsCombinedAccountsV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+}
+
+/**
+ *
+ * This file is autogenerated.
+ *
+ * DO NOT EDIT DIRECTLY
+ *
+ **/
+class ContainerSecurityApiBridge {
+  bridge;
+  constructor(bridge) {
+    this.bridge = bridge;
+  }
+  getBridge() {
+    return this.bridge;
+  }
+  async getAggregatesClustersCountV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesClustersCountV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesContainersCountV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesContainersCountV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesContainersGroupByManagedV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesContainersGroupByManagedV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesContainersSensorCoverageV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesContainersSensorCoverageV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesImagesCountByStateV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesImagesCountByStateV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesNodesCountV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesNodesCountV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesPodsCountV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesPodsCountV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getAggregatesUnidentifiedContainersCountV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getAggregatesUnidentifiedContainersCountV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getCombinedClustersV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'containerSecurity',
+      method: 'getCombinedClustersV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+}
+
+/**
+ *
+ * This file is autogenerated.
+ *
+ * DO NOT EDIT DIRECTLY
+ *
+ **/
+class CspmRegistrationApiBridge {
+  bridge;
+  constructor(bridge) {
+    this.bridge = bridge;
+  }
+  getBridge() {
+    return this.bridge;
+  }
+  async getCspmregistrationCloudConnectCspmAzureCombinedAccountsV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'cspmRegistration',
+      method: 'getCspmregistrationCloudConnectCspmAzureCombinedAccountsV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async getCspmregistrationCloudConnectCspmGcpCombinedAccountsV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'cspmRegistration',
+      method: 'getCspmregistrationCloudConnectCspmGcpCombinedAccountsV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+}
+
+/**
+ *
+ * This file is autogenerated.
+ *
+ * DO NOT EDIT DIRECTLY
+ *
+ **/
 class CustomobjectsApiBridge {
   bridge;
   constructor(bridge) {
@@ -3972,6 +4222,17 @@ class DevicesApiBridge {
     };
     return this.bridge.postMessage(message);
   }
+  async getEntitiesDevicesV1(urlParams) {
+    const message = {
+      type: 'api',
+      api: 'devices',
+      method: 'getEntitiesDevicesV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
   async getEntitiesFgaGroupsV1(urlParams) {
     const message = {
       type: 'api',
@@ -4072,6 +4333,18 @@ class DevicesApiBridge {
     };
     return this.bridge.postMessage(message);
   }
+  async patchEntitiesDevicesV1(postBody, urlParams) {
+    const message = {
+      type: 'api',
+      api: 'devices',
+      method: 'patchEntitiesDevicesV1',
+      payload: {
+        body: postBody,
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
   async patchEntitiesGroupsV1(postBody, urlParams = {}) {
     const message = {
       type: 'api',
@@ -4161,6 +4434,18 @@ class DevicesApiBridge {
       type: 'api',
       api: 'devices',
       method: 'postEntitiesDevicesReportsV1',
+      payload: {
+        body: postBody,
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+  async postEntitiesDevicesV1(postBody, urlParams) {
+    const message = {
+      type: 'api',
+      api: 'devices',
+      method: 'postEntitiesDevicesV1',
       payload: {
         body: postBody,
         params: urlParams
@@ -4934,6 +5219,34 @@ class PluginsApiBridge {
  * DO NOT EDIT DIRECTLY
  *
  **/
+class RegistryAssessmentApiBridge {
+  bridge;
+  constructor(bridge) {
+    this.bridge = bridge;
+  }
+  getBridge() {
+    return this.bridge;
+  }
+  async getAggregatesRegistriesCountByStateV1(urlParams = {}) {
+    const message = {
+      type: 'api',
+      api: 'registryAssessment',
+      method: 'getAggregatesRegistriesCountByStateV1',
+      payload: {
+        params: urlParams
+      }
+    };
+    return this.bridge.postMessage(message);
+  }
+}
+
+/**
+ *
+ * This file is autogenerated.
+ *
+ * DO NOT EDIT DIRECTLY
+ *
+ **/
 class RemoteResponseApiBridge {
   bridge;
   constructor(bridge) {
@@ -5140,9 +5453,6 @@ class FalconPublicApis {
     assertConnection(this.api);
     return new MitreApiBridge(this.api.bridge);
   }
-  /**
-   * @internal
-   */
   get plugins() {
     assertConnection(this.api);
     return new PluginsApiBridge(this.api.bridge);
@@ -5159,26 +5469,37 @@ class FalconPublicApis {
     assertConnection(this.api);
     return new WorkflowsApiBridge(this.api.bridge);
   }
-  /**
-   * @internal
-   */
+  get cloudSecurityAssets() {
+    assertConnection(this.api);
+    return new CloudSecurityAssetsApiBridge(this.api.bridge);
+  }
+  get cloudregistration() {
+    assertConnection(this.api);
+    return new CloudregistrationApiBridge(this.api.bridge);
+  }
+  get containerSecurity() {
+    assertConnection(this.api);
+    return new ContainerSecurityApiBridge(this.api.bridge);
+  }
+  get cspmRegistration() {
+    assertConnection(this.api);
+    return new CspmRegistrationApiBridge(this.api.bridge);
+  }
   get customobjects() {
     assertConnection(this.api);
     return new CustomobjectsApiBridge(this.api.bridge);
   }
-  /**
-   * @internal
-   */
   get faasGateway() {
     assertConnection(this.api);
     return new FaasGatewayApiBridge(this.api.bridge);
   }
-  /**
-   * @internal
-   */
   get loggingapi() {
     assertConnection(this.api);
     return new LoggingapiApiBridge(this.api.bridge);
+  }
+  get registryAssessment() {
+    assertConnection(this.api);
+    return new RegistryAssessmentApiBridge(this.api.bridge);
   }
 }
 __decorate([Memoize()], FalconPublicApis.prototype, "alerts", null);
@@ -5191,9 +5512,14 @@ __decorate([Memoize()], FalconPublicApis.prototype, "plugins", null);
 __decorate([Memoize()], FalconPublicApis.prototype, "remoteResponse", null);
 __decorate([Memoize()], FalconPublicApis.prototype, "userManagement", null);
 __decorate([Memoize()], FalconPublicApis.prototype, "workflows", null);
+__decorate([Memoize()], FalconPublicApis.prototype, "cloudSecurityAssets", null);
+__decorate([Memoize()], FalconPublicApis.prototype, "cloudregistration", null);
+__decorate([Memoize()], FalconPublicApis.prototype, "containerSecurity", null);
+__decorate([Memoize()], FalconPublicApis.prototype, "cspmRegistration", null);
 __decorate([Memoize()], FalconPublicApis.prototype, "customobjects", null);
 __decorate([Memoize()], FalconPublicApis.prototype, "faasGateway", null);
 __decorate([Memoize()], FalconPublicApis.prototype, "loggingapi", null);
+__decorate([Memoize()], FalconPublicApis.prototype, "registryAssessment", null);
 class ApiIntegration {
   falcon;
   definition;

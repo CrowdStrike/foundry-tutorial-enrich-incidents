@@ -12,7 +12,7 @@
     "@shoelace-style/shoelace": "^2.20.1",
     "react": "19.2.1",
     "react-dom": "19.2.1",
-    "react-router-dom": "7.6.1"
+    "react-router-dom": "7.13.1"
   },
   "devDependencies": {
     "@babel/core": "7.27.4",
@@ -24,8 +24,16 @@
     "@rollup/plugin-replace": "6.0.2",
     "@web/rollup-plugin-html": "2.3.0",
     "postcss": "^8.5.4",
-    "rollup": "4.41.1",
+    "rollup": "4.59.0",
     "rollup-plugin-postcss": "^4.0.2"
+  },
+  "overrides": {
+    "svgo": ">=2.8.1",
+    "minimatch": ">=3.1.4",
+    "glob": ">=10.5.0",
+    "lodash": ">=4.17.23",
+    "tmp": ">=0.2.4",
+    "brace-expansion": ">=1.1.12"
   },
   "scripts": {
     "build": "rollup -c ./config/rollup.config.js",

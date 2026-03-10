@@ -433,248 +433,8 @@ var React$1 = /*#__PURE__*/_mergeNamespaces({
 	default: React
 }, [reactExports]);
 
-var dist = {};
-
-var hasRequiredDist;
-
-function requireDist () {
-	if (hasRequiredDist) return dist;
-	hasRequiredDist = 1;
-
-	Object.defineProperty(dist, "__esModule", {
-	  value: true
-	});
-	dist.parse = parse;
-	dist.serialize = serialize;
-	/**
-	 * RegExp to match cookie-name in RFC 6265 sec 4.1.1
-	 * This refers out to the obsoleted definition of token in RFC 2616 sec 2.2
-	 * which has been replaced by the token definition in RFC 7230 appendix B.
-	 *
-	 * cookie-name       = token
-	 * token             = 1*tchar
-	 * tchar             = "!" / "#" / "$" / "%" / "&" / "'" /
-	 *                     "*" / "+" / "-" / "." / "^" / "_" /
-	 *                     "`" / "|" / "~" / DIGIT / ALPHA
-	 *
-	 * Note: Allowing more characters - https://github.com/jshttp/cookie/issues/191
-	 * Allow same range as cookie value, except `=`, which delimits end of name.
-	 */
-	const cookieNameRegExp = /^[\u0021-\u003A\u003C\u003E-\u007E]+$/;
-	/**
-	 * RegExp to match cookie-value in RFC 6265 sec 4.1.1
-	 *
-	 * cookie-value      = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
-	 * cookie-octet      = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
-	 *                     ; US-ASCII characters excluding CTLs,
-	 *                     ; whitespace DQUOTE, comma, semicolon,
-	 *                     ; and backslash
-	 *
-	 * Allowing more characters: https://github.com/jshttp/cookie/issues/191
-	 * Comma, backslash, and DQUOTE are not part of the parsing algorithm.
-	 */
-	const cookieValueRegExp = /^[\u0021-\u003A\u003C-\u007E]*$/;
-	/**
-	 * RegExp to match domain-value in RFC 6265 sec 4.1.1
-	 *
-	 * domain-value      = <subdomain>
-	 *                     ; defined in [RFC1034], Section 3.5, as
-	 *                     ; enhanced by [RFC1123], Section 2.1
-	 * <subdomain>       = <label> | <subdomain> "." <label>
-	 * <label>           = <let-dig> [ [ <ldh-str> ] <let-dig> ]
-	 *                     Labels must be 63 characters or less.
-	 *                     'let-dig' not 'letter' in the first char, per RFC1123
-	 * <ldh-str>         = <let-dig-hyp> | <let-dig-hyp> <ldh-str>
-	 * <let-dig-hyp>     = <let-dig> | "-"
-	 * <let-dig>         = <letter> | <digit>
-	 * <letter>          = any one of the 52 alphabetic characters A through Z in
-	 *                     upper case and a through z in lower case
-	 * <digit>           = any one of the ten digits 0 through 9
-	 *
-	 * Keep support for leading dot: https://github.com/jshttp/cookie/issues/173
-	 *
-	 * > (Note that a leading %x2E ("."), if present, is ignored even though that
-	 * character is not permitted, but a trailing %x2E ("."), if present, will
-	 * cause the user agent to ignore the attribute.)
-	 */
-	const domainValueRegExp = /^([.]?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)([.][a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
-	/**
-	 * RegExp to match path-value in RFC 6265 sec 4.1.1
-	 *
-	 * path-value        = <any CHAR except CTLs or ";">
-	 * CHAR              = %x01-7F
-	 *                     ; defined in RFC 5234 appendix B.1
-	 */
-	const pathValueRegExp = /^[\u0020-\u003A\u003D-\u007E]*$/;
-	const __toString = Object.prototype.toString;
-	const NullObject = /* @__PURE__ */(() => {
-	  const C = function () {};
-	  C.prototype = Object.create(null);
-	  return C;
-	})();
-	/**
-	 * Parse a cookie header.
-	 *
-	 * Parse the given cookie header string into an object
-	 * The object has the various cookies as keys(names) => values
-	 */
-	function parse(str, options) {
-	  const obj = new NullObject();
-	  const len = str.length;
-	  // RFC 6265 sec 4.1.1, RFC 2616 2.2 defines a cookie name consists of one char minimum, plus '='.
-	  if (len < 2) return obj;
-	  const dec = options?.decode || decode;
-	  let index = 0;
-	  do {
-	    const eqIdx = str.indexOf("=", index);
-	    if (eqIdx === -1) break; // No more cookie pairs.
-	    const colonIdx = str.indexOf(";", index);
-	    const endIdx = colonIdx === -1 ? len : colonIdx;
-	    if (eqIdx > endIdx) {
-	      // backtrack on prior semicolon
-	      index = str.lastIndexOf(";", eqIdx - 1) + 1;
-	      continue;
-	    }
-	    const keyStartIdx = startIndex(str, index, eqIdx);
-	    const keyEndIdx = endIndex(str, eqIdx, keyStartIdx);
-	    const key = str.slice(keyStartIdx, keyEndIdx);
-	    // only assign once
-	    if (obj[key] === undefined) {
-	      let valStartIdx = startIndex(str, eqIdx + 1, endIdx);
-	      let valEndIdx = endIndex(str, endIdx, valStartIdx);
-	      const value = dec(str.slice(valStartIdx, valEndIdx));
-	      obj[key] = value;
-	    }
-	    index = endIdx + 1;
-	  } while (index < len);
-	  return obj;
-	}
-	function startIndex(str, index, max) {
-	  do {
-	    const code = str.charCodeAt(index);
-	    if (code !== 0x20 /*   */ && code !== 0x09 /* \t */) return index;
-	  } while (++index < max);
-	  return max;
-	}
-	function endIndex(str, index, min) {
-	  while (index > min) {
-	    const code = str.charCodeAt(--index);
-	    if (code !== 0x20 /*   */ && code !== 0x09 /* \t */) return index + 1;
-	  }
-	  return min;
-	}
-	/**
-	 * Serialize data into a cookie header.
-	 *
-	 * Serialize a name value pair into a cookie string suitable for
-	 * http headers. An optional options object specifies cookie parameters.
-	 *
-	 * serialize('foo', 'bar', { httpOnly: true })
-	 *   => "foo=bar; httpOnly"
-	 */
-	function serialize(name, val, options) {
-	  const enc = options?.encode || encodeURIComponent;
-	  if (!cookieNameRegExp.test(name)) {
-	    throw new TypeError(`argument name is invalid: ${name}`);
-	  }
-	  const value = enc(val);
-	  if (!cookieValueRegExp.test(value)) {
-	    throw new TypeError(`argument val is invalid: ${val}`);
-	  }
-	  let str = name + "=" + value;
-	  if (!options) return str;
-	  if (options.maxAge !== undefined) {
-	    if (!Number.isInteger(options.maxAge)) {
-	      throw new TypeError(`option maxAge is invalid: ${options.maxAge}`);
-	    }
-	    str += "; Max-Age=" + options.maxAge;
-	  }
-	  if (options.domain) {
-	    if (!domainValueRegExp.test(options.domain)) {
-	      throw new TypeError(`option domain is invalid: ${options.domain}`);
-	    }
-	    str += "; Domain=" + options.domain;
-	  }
-	  if (options.path) {
-	    if (!pathValueRegExp.test(options.path)) {
-	      throw new TypeError(`option path is invalid: ${options.path}`);
-	    }
-	    str += "; Path=" + options.path;
-	  }
-	  if (options.expires) {
-	    if (!isDate(options.expires) || !Number.isFinite(options.expires.valueOf())) {
-	      throw new TypeError(`option expires is invalid: ${options.expires}`);
-	    }
-	    str += "; Expires=" + options.expires.toUTCString();
-	  }
-	  if (options.httpOnly) {
-	    str += "; HttpOnly";
-	  }
-	  if (options.secure) {
-	    str += "; Secure";
-	  }
-	  if (options.partitioned) {
-	    str += "; Partitioned";
-	  }
-	  if (options.priority) {
-	    const priority = typeof options.priority === "string" ? options.priority.toLowerCase() : undefined;
-	    switch (priority) {
-	      case "low":
-	        str += "; Priority=Low";
-	        break;
-	      case "medium":
-	        str += "; Priority=Medium";
-	        break;
-	      case "high":
-	        str += "; Priority=High";
-	        break;
-	      default:
-	        throw new TypeError(`option priority is invalid: ${options.priority}`);
-	    }
-	  }
-	  if (options.sameSite) {
-	    const sameSite = typeof options.sameSite === "string" ? options.sameSite.toLowerCase() : options.sameSite;
-	    switch (sameSite) {
-	      case true:
-	      case "strict":
-	        str += "; SameSite=Strict";
-	        break;
-	      case "lax":
-	        str += "; SameSite=Lax";
-	        break;
-	      case "none":
-	        str += "; SameSite=None";
-	        break;
-	      default:
-	        throw new TypeError(`option sameSite is invalid: ${options.sameSite}`);
-	    }
-	  }
-	  return str;
-	}
-	/**
-	 * URL-decode string value. Optimized to skip native call when no %.
-	 */
-	function decode(str) {
-	  if (str.indexOf("%") === -1) return str;
-	  try {
-	    return decodeURIComponent(str);
-	  } catch (e) {
-	    return str;
-	  }
-	}
-	/**
-	 * Determine if value is a Date.
-	 */
-	function isDate(val) {
-	  return __toString.call(val) === "[object Date]";
-	}
-	return dist;
-}
-
-requireDist();
-
 /**
- * react-router v7.6.1
+ * react-router v7.13.1
  *
  * Copyright (c) Remix Software Inc.
  *
@@ -684,6 +444,9 @@ requireDist();
  * @license MIT
  */
 var PopStateEventType = "popstate";
+function isLocation(obj) {
+  return typeof obj === "object" && obj != null && "pathname" in obj && "search" in obj && "hash" in obj && "state" in obj && "key" in obj;
+}
 function createHashHistory(options = {}) {
   function createHashLocation(window2, globalHistory) {
     let {
@@ -704,13 +467,13 @@ function createHashHistory(options = {}) {
   }
   function createHashHref(window2, to) {
     let base = window2.document.querySelector("base");
-    let href2 = "";
+    let href = "";
     if (base && base.getAttribute("href")) {
       let url = window2.location.href;
       let hashIndex = url.indexOf("#");
-      href2 = hashIndex === -1 ? url : url.slice(0, hashIndex);
+      href = hashIndex === -1 ? url : url.slice(0, hashIndex);
     }
-    return href2 + "#" + (typeof to === "string" ? to : createPath(to));
+    return href + "#" + (typeof to === "string" ? to : createPath(to));
   }
   function validateHashLocation(location, to) {
     warning(location.pathname.charAt(0) === "/", `relative pathnames are not supported in hash history.push(${JSON.stringify(to)})`);
@@ -737,10 +500,15 @@ function getHistoryState(location, index) {
   return {
     usr: location.state,
     key: location.key,
-    idx: index
+    idx: index,
+    masked: location.unstable_mask ? {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash
+    } : void 0
   };
 }
-function createLocation(current, to, state = null, key) {
+function createLocation(current, to, state = null, key, unstable_mask) {
   let location = {
     pathname: typeof current === "string" ? current : current.pathname,
     search: "",
@@ -751,7 +519,8 @@ function createLocation(current, to, state = null, key) {
     // full Locations now and avoid the need to run through this flow at all
     // But that's a pretty big refactor to the current test suite so going to
     // keep as is for the time being and just let any incoming keys take precedence
-    key: to && to.key || key || createKey()
+    key: to && to.key || key || createKey(),
+    unstable_mask
   };
   return location;
 }
@@ -820,11 +589,11 @@ function getUrlBasedHistory(getLocation, createHref2, validateLocation, options 
   }
   function push(to, state) {
     action = "PUSH" /* Push */;
-    let location = createLocation(history.location, to, state);
+    let location = isLocation(to) ? to : createLocation(history.location, to, state);
     if (validateLocation) validateLocation(location, to);
     index = getIndex() + 1;
     let historyState = getHistoryState(location, index);
-    let url = history.createHref(location);
+    let url = history.createHref(location.unstable_mask || location);
     try {
       globalHistory.pushState(historyState, "", url);
     } catch (error) {
@@ -843,11 +612,11 @@ function getUrlBasedHistory(getLocation, createHref2, validateLocation, options 
   }
   function replace2(to, state) {
     action = "REPLACE" /* Replace */;
-    let location = createLocation(history.location, to, state);
+    let location = isLocation(to) ? to : createLocation(history.location, to, state);
     if (validateLocation) validateLocation(location, to);
     index = getIndex();
     let historyState = getHistoryState(location, index);
-    let url = history.createHref(location);
+    let url = history.createHref(location.unstable_mask || location);
     globalHistory.replaceState(historyState, "", url);
     if (v5Compat && listener) {
       listener({
@@ -904,12 +673,12 @@ function createBrowserURLImpl(to, isAbsolute = false) {
     base = window.location.origin !== "null" ? window.location.origin : window.location.href;
   }
   invariant(base, "No window.location.(origin|href) available to create URL");
-  let href2 = typeof to === "string" ? to : createPath(to);
-  href2 = href2.replace(/ $/, "%20");
-  if (!isAbsolute && href2.startsWith("//")) {
-    href2 = base + href2;
+  let href = typeof to === "string" ? to : createPath(to);
+  href = href.replace(/ $/, "%20");
+  if (!isAbsolute && href.startsWith("//")) {
+    href = base + href;
   }
-  return new URL(href2, base);
+  return new URL(href, base);
 }
 function matchRoutes(routes, locationArg, basename = "/") {
   return matchRoutesImpl(routes, locationArg, basename, false);
@@ -929,8 +698,8 @@ function matchRoutesImpl(routes, locationArg, basename, allowPartial) {
   }
   return matches;
 }
-function flattenRoutes(routes, branches = [], parentsMeta = [], parentPath = "") {
-  let flattenRoute = (route, index, relativePath) => {
+function flattenRoutes(routes, branches = [], parentsMeta = [], parentPath = "", _hasParentOptionalSegments = false) {
+  let flattenRoute = (route, index, hasParentOptionalSegments = _hasParentOptionalSegments, relativePath) => {
     let meta = {
       relativePath: relativePath === void 0 ? route.path || "" : relativePath,
       caseSensitive: route.caseSensitive === true,
@@ -938,6 +707,9 @@ function flattenRoutes(routes, branches = [], parentsMeta = [], parentPath = "")
       route
     };
     if (meta.relativePath.startsWith("/")) {
+      if (!meta.relativePath.startsWith(parentPath) && hasParentOptionalSegments) {
+        return;
+      }
       invariant(meta.relativePath.startsWith(parentPath), `Absolute route path "${meta.relativePath}" nested under path "${parentPath}" is not valid. An absolute child route path must start with the combined path of all its parent routes.`);
       meta.relativePath = meta.relativePath.slice(parentPath.length);
     }
@@ -948,7 +720,7 @@ function flattenRoutes(routes, branches = [], parentsMeta = [], parentPath = "")
       // Our types know better, but runtime JS may not!
       // @ts-expect-error
       route.index !== true, `Index routes must not have child routes. Please remove all child routes from route path "${path}".`);
-      flattenRoutes(route.children, branches, routesMeta, path);
+      flattenRoutes(route.children, branches, routesMeta, path, hasParentOptionalSegments);
     }
     if (route.path == null && !route.index) {
       return;
@@ -964,7 +736,7 @@ function flattenRoutes(routes, branches = [], parentsMeta = [], parentPath = "")
       flattenRoute(route, index);
     } else {
       for (let exploded of explodeOptionalSegments(route.path)) {
-        flattenRoute(route, index, exploded);
+        flattenRoute(route, index, true, exploded);
       }
     }
   });
@@ -1101,13 +873,20 @@ function matchPath(pattern, pathname) {
 function compilePath(path, caseSensitive = false, end = true) {
   warning(path === "*" || !path.endsWith("*") || path.endsWith("/*"), `Route path "${path}" will be treated as if it were "${path.replace(/\*$/, "/*")}" because the \`*\` character must always follow a \`/\` in the pattern. To get rid of this warning, please change the route path to "${path.replace(/\*$/, "/*")}".`);
   let params = [];
-  let regexpSource = "^" + path.replace(/\/*\*?$/, "").replace(/^\/*/, "/").replace(/[\\.*+^${}|()[\]]/g, "\\$&").replace(/\/:([\w-]+)(\?)?/g, (_, paramName, isOptional) => {
+  let regexpSource = "^" + path.replace(/\/*\*?$/, "").replace(/^\/*/, "/").replace(/[\\.*+^${}|()[\]]/g, "\\$&").replace(/\/:([\w-]+)(\?)?/g, (match, paramName, isOptional, index, str) => {
     params.push({
       paramName,
       isOptional: isOptional != null
     });
-    return isOptional ? "/?([^\\/]+)?" : "/([^\\/]+)";
-  });
+    if (isOptional) {
+      let nextChar = str.charAt(index + match.length);
+      if (nextChar && nextChar !== "/") {
+        return "/([^\\/]*)";
+      }
+      return "(?:/([^\\/]*))?";
+    }
+    return "/([^\\/]+)";
+  }).replace(/\/([\w-]+)\?(\/|$)/g, "(/$1)?$2");
   if (path.endsWith("*")) {
     params.push({
       paramName: "*"
@@ -1141,13 +920,24 @@ function stripBasename(pathname, basename) {
   }
   return pathname.slice(startIndex) || "/";
 }
+var ABSOLUTE_URL_REGEX = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 function resolvePath(to, fromPathname = "/") {
   let {
     pathname: toPathname,
     search = "",
     hash = ""
   } = typeof to === "string" ? parsePath(to) : to;
-  let pathname = toPathname ? toPathname.startsWith("/") ? toPathname : resolvePathname(toPathname, fromPathname) : fromPathname;
+  let pathname;
+  if (toPathname) {
+    toPathname = toPathname.replace(/\/\/+/g, "/");
+    if (toPathname.startsWith("/")) {
+      pathname = resolvePathname(toPathname.substring(1), "/");
+    } else {
+      pathname = resolvePathname(toPathname, fromPathname);
+    }
+  } else {
+    pathname = fromPathname;
+  }
   return {
     pathname,
     search: normalizeSearch(search),
@@ -1217,9 +1007,52 @@ var joinPaths = paths => paths.join("/").replace(/\/\/+/g, "/");
 var normalizePathname = pathname => pathname.replace(/\/+$/, "").replace(/^\/*/, "/");
 var normalizeSearch = search => !search || search === "?" ? "" : search.startsWith("?") ? search : "?" + search;
 var normalizeHash = hash => !hash || hash === "#" ? "" : hash.startsWith("#") ? hash : "#" + hash;
-function isRouteErrorResponse(error) {
-  return error != null && typeof error.status === "number" && typeof error.statusText === "string" && typeof error.internal === "boolean" && "data" in error;
+var ErrorResponseImpl = class {
+  constructor(status, statusText, data2, internal = false) {
+    this.status = status;
+    this.statusText = statusText || "";
+    this.internal = internal;
+    if (data2 instanceof Error) {
+      this.data = data2.toString();
+      this.error = data2;
+    } else {
+      this.data = data2;
+    }
+  }
+};
+var isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined" && typeof window.document.createElement !== "undefined";
+function parseToInfo(_to, basename) {
+  let to = _to;
+  if (typeof to !== "string" || !ABSOLUTE_URL_REGEX.test(to)) {
+    return {
+      absoluteURL: void 0,
+      isExternal: false,
+      to
+    };
+  }
+  let absoluteURL = to;
+  let isExternal = false;
+  if (isBrowser) {
+    try {
+      let currentUrl = new URL(window.location.href);
+      let targetUrl = to.startsWith("//") ? new URL(currentUrl.protocol + to) : new URL(to);
+      let path = stripBasename(targetUrl.pathname, basename);
+      if (targetUrl.origin === currentUrl.origin && path != null) {
+        to = path + targetUrl.search + targetUrl.hash;
+      } else {
+        isExternal = true;
+      }
+    } catch (e) {
+      warning(false, `<Link to="${to}"> contains an invalid URL which will probably break when clicked - please update to a valid URL path.`);
+    }
+  }
+  return {
+    absoluteURL,
+    isExternal,
+    to
+  };
 }
+Object.getOwnPropertyNames(Object.prototype).sort().join("\0");
 
 // lib/router/router.ts
 var validMutationMethodsArr = ["POST", "PUT", "PATCH", "DELETE"];
@@ -1230,6 +1063,7 @@ var DataRouterContext = /*#__PURE__*/reactExports.createContext(null);
 DataRouterContext.displayName = "DataRouter";
 var DataRouterStateContext = /*#__PURE__*/reactExports.createContext(null);
 DataRouterStateContext.displayName = "DataRouterState";
+var RSCRouterContext = /*#__PURE__*/reactExports.createContext(false);
 var ViewTransitionContext = /*#__PURE__*/reactExports.createContext({
   isTransitioning: false
 });
@@ -1250,6 +1084,33 @@ var RouteContext = /*#__PURE__*/reactExports.createContext({
 RouteContext.displayName = "Route";
 var RouteErrorContext = /*#__PURE__*/reactExports.createContext(null);
 RouteErrorContext.displayName = "RouteError";
+
+// lib/errors.ts
+var ERROR_DIGEST_BASE = "REACT_ROUTER_ERROR";
+var ERROR_DIGEST_REDIRECT = "REDIRECT";
+var ERROR_DIGEST_ROUTE_ERROR_RESPONSE = "ROUTE_ERROR_RESPONSE";
+function decodeRedirectErrorDigest(digest) {
+  if (digest.startsWith(`${ERROR_DIGEST_BASE}:${ERROR_DIGEST_REDIRECT}:{`)) {
+    try {
+      let parsed = JSON.parse(digest.slice(28));
+      if (typeof parsed === "object" && parsed && typeof parsed.status === "number" && typeof parsed.statusText === "string" && typeof parsed.location === "string" && typeof parsed.reloadDocument === "boolean" && typeof parsed.replace === "boolean") {
+        return parsed;
+      }
+    } catch {}
+  }
+}
+function decodeRouteErrorResponseDigest(digest) {
+  if (digest.startsWith(`${ERROR_DIGEST_BASE}:${ERROR_DIGEST_ROUTE_ERROR_RESPONSE}:{`)) {
+    try {
+      let parsed = JSON.parse(digest.slice(40));
+      if (typeof parsed === "object" && parsed && typeof parsed.status === "number" && typeof parsed.statusText === "string") {
+        return new ErrorResponseImpl(parsed.status, parsed.statusText, parsed.data);
+      }
+    } catch {}
+  }
+}
+
+// lib/hooks.tsx
 function useHref(to, {
   relative
 } = {}) {
@@ -1340,12 +1201,9 @@ function useNavigateUnstable() {
 var OutletContext = /*#__PURE__*/reactExports.createContext(null);
 function useOutlet(context) {
   let outlet = reactExports.useContext(RouteContext).outlet;
-  if (outlet) {
-    return /* @__PURE__ */reactExports.createElement(OutletContext.Provider, {
-      value: context
-    }, outlet);
-  }
-  return outlet;
+  return reactExports.useMemo(() => outlet && /* @__PURE__ */reactExports.createElement(OutletContext.Provider, {
+    value: context
+  }, outlet), [outlet, context]);
 }
 function useResolvedPath(to, {
   relative
@@ -1362,7 +1220,7 @@ function useResolvedPath(to, {
 function useRoutes(routes, locationArg) {
   return useRoutesImpl(routes, locationArg);
 }
-function useRoutesImpl(routes, locationArg, dataRouterState, future) {
+function useRoutesImpl(routes, locationArg, dataRouterOpts) {
   invariant(useInRouterContext(),
   // TODO: This error is probably because they somehow have 2 versions of the
   // router loaded. We can help them understand how to avoid that.
@@ -1410,12 +1268,18 @@ Please change the parent <Route path="${parentPath}"> to <Route path="${parentPa
   let renderedMatches = _renderMatches(matches && matches.map(match => Object.assign({}, match, {
     params: Object.assign({}, parentParams, match.params),
     pathname: joinPaths([parentPathnameBase,
-    // Re-encode pathnames that were decoded inside matchRoutes
-    navigator.encodeLocation ? navigator.encodeLocation(match.pathname).pathname : match.pathname]),
+    // Re-encode pathnames that were decoded inside matchRoutes.
+    // Pre-encode `?` and `#` ahead of `encodeLocation` because it uses
+    // `new URL()` internally and we need to prevent it from treating
+    // them as separators
+    navigator.encodeLocation ? navigator.encodeLocation(match.pathname.replace(/\?/g, "%3F").replace(/#/g, "%23")).pathname : match.pathname]),
     pathnameBase: match.pathnameBase === "/" ? parentPathnameBase : joinPaths([parentPathnameBase,
     // Re-encode pathnames that were decoded inside matchRoutes
-    navigator.encodeLocation ? navigator.encodeLocation(match.pathnameBase).pathname : match.pathnameBase])
-  })), parentMatches, dataRouterState, future);
+    // Pre-encode `?` and `#` ahead of `encodeLocation` because it uses
+    // `new URL()` internally and we need to prevent it from treating
+    // them as separators
+    navigator.encodeLocation ? navigator.encodeLocation(match.pathnameBase.replace(/\?/g, "%3F").replace(/#/g, "%23")).pathname : match.pathnameBase])
+  })), parentMatches, dataRouterOpts);
   if (locationArg && renderedMatches) {
     return /* @__PURE__ */reactExports.createElement(LocationContext.Provider, {
       value: {
@@ -1425,6 +1289,7 @@ Please change the parent <Route path="${parentPath}"> to <Route path="${parentPa
           hash: "",
           state: null,
           key: "default",
+          unstable_mask: void 0,
           ...location
         },
         navigationType: "POP" /* Pop */
@@ -1433,37 +1298,6 @@ Please change the parent <Route path="${parentPath}"> to <Route path="${parentPa
   }
   return renderedMatches;
 }
-function DefaultErrorComponent() {
-  let error = useRouteError();
-  let message = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : error instanceof Error ? error.message : JSON.stringify(error);
-  let stack = error instanceof Error ? error.stack : null;
-  let lightgrey = "rgba(200,200,200, 0.5)";
-  let preStyles = {
-    padding: "0.5rem",
-    backgroundColor: lightgrey
-  };
-  let codeStyles = {
-    padding: "2px 4px",
-    backgroundColor: lightgrey
-  };
-  let devInfo = null;
-  {
-    console.error("Error handled by React Router default ErrorBoundary:", error);
-    devInfo = /* @__PURE__ */reactExports.createElement(reactExports.Fragment, null, /* @__PURE__ */reactExports.createElement("p", null, "\u{1F4BF} Hey developer \u{1F44B}"), /* @__PURE__ */reactExports.createElement("p", null, "You can provide a way better UX than this when your app throws errors by providing your own ", /* @__PURE__ */reactExports.createElement("code", {
-      style: codeStyles
-    }, "ErrorBoundary"), " or", " ", /* @__PURE__ */reactExports.createElement("code", {
-      style: codeStyles
-    }, "errorElement"), " prop on your route."));
-  }
-  return /* @__PURE__ */reactExports.createElement(reactExports.Fragment, null, /* @__PURE__ */reactExports.createElement("h2", null, "Unexpected Application Error!"), /* @__PURE__ */reactExports.createElement("h3", {
-    style: {
-      fontStyle: "italic"
-    }
-  }, message), stack ? /* @__PURE__ */reactExports.createElement("pre", {
-    style: preStyles
-  }, stack) : null, devInfo);
-}
-var defaultErrorElement = /* @__PURE__ */reactExports.createElement(DefaultErrorComponent, null);
 var RenderErrorBoundary = class extends reactExports.Component {
   constructor(props) {
     super(props);
@@ -1493,17 +1327,66 @@ var RenderErrorBoundary = class extends reactExports.Component {
     };
   }
   componentDidCatch(error, errorInfo) {
-    console.error("React Router caught the following error during render", error, errorInfo);
+    if (this.props.onError) {
+      this.props.onError(error, errorInfo);
+    } else {
+      console.error("React Router caught the following error during render", error);
+    }
   }
   render() {
-    return this.state.error !== void 0 ? /* @__PURE__ */reactExports.createElement(RouteContext.Provider, {
+    let error = this.state.error;
+    if (this.context && typeof error === "object" && error && "digest" in error && typeof error.digest === "string") {
+      const decoded = decodeRouteErrorResponseDigest(error.digest);
+      if (decoded) error = decoded;
+    }
+    let result = error !== void 0 ? /* @__PURE__ */reactExports.createElement(RouteContext.Provider, {
       value: this.props.routeContext
     }, /* @__PURE__ */reactExports.createElement(RouteErrorContext.Provider, {
-      value: this.state.error,
+      value: error,
       children: this.props.component
     })) : this.props.children;
+    if (this.context) {
+      return /* @__PURE__ */reactExports.createElement(RSCErrorHandler, {
+        error
+      }, result);
+    }
+    return result;
   }
 };
+RenderErrorBoundary.contextType = RSCRouterContext;
+var errorRedirectHandledMap = /* @__PURE__ */new WeakMap();
+function RSCErrorHandler({
+  children,
+  error
+}) {
+  let {
+    basename
+  } = reactExports.useContext(NavigationContext);
+  if (typeof error === "object" && error && "digest" in error && typeof error.digest === "string") {
+    let redirect2 = decodeRedirectErrorDigest(error.digest);
+    if (redirect2) {
+      let existingRedirect = errorRedirectHandledMap.get(error);
+      if (existingRedirect) throw existingRedirect;
+      let parsed = parseToInfo(redirect2.location, basename);
+      if (isBrowser && !errorRedirectHandledMap.get(error)) {
+        if (parsed.isExternal || redirect2.reloadDocument) {
+          window.location.href = parsed.absoluteURL || parsed.to;
+        } else {
+          const redirectPromise = Promise.resolve().then(() => window.__reactRouterDataRouter.navigate(parsed.to, {
+            replace: redirect2.replace
+          }));
+          errorRedirectHandledMap.set(error, redirectPromise);
+          throw redirectPromise;
+        }
+      }
+      return /* @__PURE__ */reactExports.createElement("meta", {
+        httpEquiv: "refresh",
+        content: `0;url=${parsed.absoluteURL || parsed.to}`
+      });
+    }
+  }
+  return children;
+}
 function RenderedRoute({
   routeContext,
   match,
@@ -1517,79 +1400,19 @@ function RenderedRoute({
     value: routeContext
   }, children);
 }
-function _renderMatches(matches, parentMatches = [], dataRouterState = null, future = null) {
+function _renderMatches(matches, parentMatches = [], dataRouterOpts) {
+  let dataRouterState = dataRouterOpts?.state;
   if (matches == null) {
-    if (!dataRouterState) {
-      return null;
-    }
-    if (dataRouterState.errors) {
-      matches = dataRouterState.matches;
-    } else if (parentMatches.length === 0 && !dataRouterState.initialized && dataRouterState.matches.length > 0) {
-      matches = dataRouterState.matches;
-    } else {
+    {
       return null;
     }
   }
   let renderedMatches = matches;
-  let errors = dataRouterState?.errors;
-  if (errors != null) {
-    let errorIndex = renderedMatches.findIndex(m => m.route.id && errors?.[m.route.id] !== void 0);
-    invariant(errorIndex >= 0, `Could not find a matching route for errors on route IDs: ${Object.keys(errors).join(",")}`);
-    renderedMatches = renderedMatches.slice(0, Math.min(renderedMatches.length, errorIndex + 1));
-  }
-  let renderFallback = false;
-  let fallbackIndex = -1;
-  if (dataRouterState) {
-    for (let i = 0; i < renderedMatches.length; i++) {
-      let match = renderedMatches[i];
-      if (match.route.HydrateFallback || match.route.hydrateFallbackElement) {
-        fallbackIndex = i;
-      }
-      if (match.route.id) {
-        let {
-          loaderData,
-          errors: errors2
-        } = dataRouterState;
-        let needsToRunLoader = match.route.loader && !loaderData.hasOwnProperty(match.route.id) && (!errors2 || errors2[match.route.id] === void 0);
-        if (match.route.lazy || needsToRunLoader) {
-          renderFallback = true;
-          if (fallbackIndex >= 0) {
-            renderedMatches = renderedMatches.slice(0, fallbackIndex + 1);
-          } else {
-            renderedMatches = [renderedMatches[0]];
-          }
-          break;
-        }
-      }
-    }
-  }
   return renderedMatches.reduceRight((outlet, match, index) => {
-    let error;
-    let shouldRenderHydrateFallback = false;
-    let errorElement = null;
-    let hydrateFallbackElement = null;
-    if (dataRouterState) {
-      error = errors && match.route.id ? errors[match.route.id] : void 0;
-      errorElement = match.route.errorElement || defaultErrorElement;
-      if (renderFallback) {
-        if (fallbackIndex < 0 && index === 0) {
-          warningOnce("route-fallback", false, "No `HydrateFallback` element provided to render during initial hydration");
-          shouldRenderHydrateFallback = true;
-          hydrateFallbackElement = null;
-        } else if (fallbackIndex === index) {
-          shouldRenderHydrateFallback = true;
-          hydrateFallbackElement = match.route.hydrateFallbackElement || null;
-        }
-      }
-    }
     let matches2 = parentMatches.concat(renderedMatches.slice(0, index + 1));
     let getChildren = () => {
       let children;
-      if (error) {
-        children = errorElement;
-      } else if (shouldRenderHydrateFallback) {
-        children = hydrateFallbackElement;
-      } else if (match.route.Component) {
+      if (match.route.Component) {
         children = /* @__PURE__ */reactExports.createElement(match.route.Component, null);
       } else if (match.route.element) {
         children = match.route.element;
@@ -1606,18 +1429,7 @@ function _renderMatches(matches, parentMatches = [], dataRouterState = null, fut
         children
       });
     };
-    return dataRouterState && (match.route.ErrorBoundary || match.route.errorElement || index === 0) ? /* @__PURE__ */reactExports.createElement(RenderErrorBoundary, {
-      location: dataRouterState.location,
-      revalidation: dataRouterState.revalidation,
-      component: errorElement,
-      error,
-      children: getChildren(),
-      routeContext: {
-        outlet: null,
-        matches: matches2,
-        isDataRoute: true
-      }
-    }) : getChildren();
+    return getChildren();
   }, null);
 }
 function getDataRouterConsoleError(hookName) {
@@ -1627,11 +1439,6 @@ function useDataRouterContext(hookName) {
   let ctx = reactExports.useContext(DataRouterContext);
   invariant(ctx, getDataRouterConsoleError(hookName));
   return ctx;
-}
-function useDataRouterState(hookName) {
-  let state = reactExports.useContext(DataRouterStateContext);
-  invariant(state, getDataRouterConsoleError(hookName));
-  return state;
 }
 function useRouteContext(hookName) {
   let route = reactExports.useContext(RouteContext);
@@ -1647,15 +1454,6 @@ function useCurrentRouteId(hookName) {
 function useRouteId() {
   return useCurrentRouteId("useRouteId" /* UseRouteId */);
 }
-function useRouteError() {
-  let error = reactExports.useContext(RouteErrorContext);
-  let state = useDataRouterState("useRouteError" /* UseRouteError */);
-  let routeId = useCurrentRouteId("useRouteError" /* UseRouteError */);
-  if (error !== void 0) {
-    return error;
-  }
-  return state.errors?.[routeId];
-}
 function useNavigateStable() {
   let {
     router
@@ -1669,7 +1467,7 @@ function useNavigateStable() {
     warning(activeRef.current, navigateEffectWarning);
     if (!activeRef.current) return;
     if (typeof to === "number") {
-      router.navigate(to);
+      await router.navigate(to);
     } else {
       await router.navigate(to, {
         fromRouteId: id,
@@ -1689,7 +1487,7 @@ function warningOnce(key, cond, message) {
 function Outlet(props) {
   return useOutlet(props.context);
 }
-function Route(_props) {
+function Route(props) {
   invariant(false, `A <Route> is only ever to be used as the child of <Routes> element, never rendered directly. Please wrap your <Route> in a <Routes>.`);
 }
 function Router({
@@ -1698,7 +1496,8 @@ function Router({
   location: locationProp,
   navigationType = "POP" /* Pop */,
   navigator,
-  static: staticProp = false
+  static: staticProp = false,
+  unstable_useTransitions
 }) {
   invariant(!useInRouterContext(), `You cannot render a <Router> inside another <Router>. You should never have more than one in your app.`);
   let basename = basenameProp.replace(/^\/*/, "/");
@@ -1706,8 +1505,9 @@ function Router({
     basename,
     navigator,
     static: staticProp,
+    unstable_useTransitions,
     future: {}
-  }), [basename, navigator, staticProp]);
+  }), [basename, navigator, staticProp, unstable_useTransitions]);
   if (typeof locationProp === "string") {
     locationProp = parsePath(locationProp);
   }
@@ -1716,7 +1516,8 @@ function Router({
     search = "",
     hash = "",
     state = null,
-    key = "default"
+    key = "default",
+    unstable_mask
   } = locationProp;
   let locationContext = reactExports.useMemo(() => {
     let trailingPathname = stripBasename(pathname, basename);
@@ -1729,11 +1530,12 @@ function Router({
         search,
         hash,
         state,
-        key
+        key,
+        unstable_mask
       },
       navigationType
     };
-  }, [basename, pathname, search, hash, state, key, navigationType]);
+  }, [basename, pathname, search, hash, state, key, navigationType, unstable_mask]);
   warning(locationContext != null, `<Router basename="${basename}"> is not able to match the URL "${pathname}${search}${hash}" because it does not start with the basename, so the <Router> won't render anything.`);
   if (locationContext == null) {
     return null;
@@ -1771,6 +1573,7 @@ function createRoutesFromChildren(children, parentPath = []) {
       Component: element.props.Component,
       index: element.props.index,
       path: element.props.path,
+      middleware: element.props.middleware,
       loader: element.props.loader,
       action: element.props.action,
       hydrateFallbackElement: element.props.hydrateFallbackElement,
@@ -1794,7 +1597,7 @@ function createRoutesFromChildren(children, parentPath = []) {
 var defaultMethod = "get";
 var defaultEncType = "application/x-www-form-urlencoded";
 function isHtmlElement(object) {
-  return object != null && typeof object.tagName === "string";
+  return typeof HTMLElement !== "undefined" && object instanceof HTMLElement;
 }
 function isButtonElement(object) {
   return isHtmlElement(object) && object.tagName.toLowerCase() === "button";
@@ -1893,12 +1696,35 @@ function getFormSubmissionInfo(target, basename) {
     body
   };
 }
+Object.getOwnPropertyNames(Object.prototype).sort().join("\0");
 
 // lib/dom/ssr/invariant.ts
 function invariant2(value, message) {
   if (value === false || value === null || typeof value === "undefined") {
     throw new Error(message);
   }
+}
+function singleFetchUrl(reqUrl, basename, trailingSlashAware, extension) {
+  let url = typeof reqUrl === "string" ? new URL(reqUrl,
+  // This can be called during the SSR flow via PrefetchPageLinksImpl so
+  // don't assume window is available
+  typeof window === "undefined" ? "server://singlefetch/" : window.location.origin) : reqUrl;
+  if (trailingSlashAware) {
+    if (url.pathname.endsWith("/")) {
+      url.pathname = `${url.pathname}_.${extension}`;
+    } else {
+      url.pathname = `${url.pathname}.${extension}`;
+    }
+  } else {
+    if (url.pathname === "/") {
+      url.pathname = `_root.${extension}`;
+    } else if (basename && stripBasename(url.pathname, basename) === "/") {
+      url.pathname = `${basename.replace(/\/$/, "")}/_root.${extension}`;
+    } else {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}.${extension}`;
+    }
+  }
+  return url;
 }
 
 // lib/dom/ssr/routeModules.ts
@@ -2042,22 +1868,6 @@ function dedupeLinkDescriptors(descriptors, preloads) {
     return deduped;
   }, []);
 }
-Object.getOwnPropertyNames(Object.prototype).sort().join("\0");
-var NO_BODY_STATUS_CODES = /* @__PURE__ */new Set([100, 101, 204, 205]);
-function singleFetchUrl(reqUrl, basename) {
-  let url = typeof reqUrl === "string" ? new URL(reqUrl,
-  // This can be called during the SSR flow via PrefetchPageLinksImpl so
-  // don't assume window is available
-  typeof window === "undefined" ? "server://singlefetch/" : window.location.origin) : reqUrl;
-  if (url.pathname === "/") {
-    url.pathname = "_root.data";
-  } else if (basename && stripBasename(url.pathname, basename) === "/") {
-    url.pathname = `${basename.replace(/\/$/, "")}/_root.data`;
-  } else {
-    url.pathname = `${url.pathname.replace(/\/$/, "")}.data`;
-  }
-  return url;
-}
 
 // lib/dom/ssr/components.tsx
 function useDataRouterContext2() {
@@ -2149,7 +1959,7 @@ function composeEventHandlers(theirHandler, ourHandler) {
 }
 function PrefetchPageLinks({
   page,
-  ...dataLinkProps
+  ...linkProps
 }) {
   let {
     router
@@ -2161,7 +1971,7 @@ function PrefetchPageLinks({
   return /* @__PURE__ */reactExports.createElement(PrefetchPageLinksImpl, {
     page,
     matches,
-    ...dataLinkProps
+    ...linkProps
   });
 }
 function useKeyedPrefetchLinks(matches) {
@@ -2190,6 +2000,7 @@ function PrefetchPageLinksImpl({
 }) {
   let location = useLocation();
   let {
+    future,
     manifest,
     routeModules
   } = useFrameworkContext();
@@ -2224,24 +2035,24 @@ function PrefetchPageLinksImpl({
     if (routesParams.size === 0) {
       return [];
     }
-    let url = singleFetchUrl(page, basename);
+    let url = singleFetchUrl(page, basename, future.unstable_trailingSlashAwareDataRequests, "data");
     if (foundOptOutRoute && routesParams.size > 0) {
       url.searchParams.set("_routes", nextMatches.filter(m => routesParams.has(m.route.id)).map(m => m.route.id).join(","));
     }
     return [url.pathname + url.search];
-  }, [basename, loaderData, location, manifest, newMatchesForData, nextMatches, page, routeModules]);
+  }, [basename, future.unstable_trailingSlashAwareDataRequests, loaderData, location, manifest, newMatchesForData, nextMatches, page, routeModules]);
   let moduleHrefs = reactExports.useMemo(() => getModuleLinkHrefs(newMatchesForAssets, manifest), [newMatchesForAssets, manifest]);
   let keyedPrefetchLinks = useKeyedPrefetchLinks(newMatchesForAssets);
-  return /* @__PURE__ */reactExports.createElement(reactExports.Fragment, null, dataHrefs.map(href2 => /* @__PURE__ */reactExports.createElement("link", {
-    key: href2,
+  return /* @__PURE__ */reactExports.createElement(reactExports.Fragment, null, dataHrefs.map(href => /* @__PURE__ */reactExports.createElement("link", {
+    key: href,
     rel: "prefetch",
     as: "fetch",
-    href: href2,
+    href,
     ...linkProps
-  })), moduleHrefs.map(href2 => /* @__PURE__ */reactExports.createElement("link", {
-    key: href2,
+  })), moduleHrefs.map(href => /* @__PURE__ */reactExports.createElement("link", {
+    key: href,
     rel: "modulepreload",
-    href: href2,
+    href,
     ...linkProps
   })), keyedPrefetchLinks.map(({
     key,
@@ -2252,7 +2063,9 @@ function PrefetchPageLinksImpl({
   /* @__PURE__ */
   reactExports.createElement("link", {
     key,
-    ...link
+    nonce: linkProps.nonce,
+    ...link,
+    crossOrigin: link.crossOrigin ?? linkProps.crossOrigin
   })));
 }
 function mergeRefs(...refs) {
@@ -2266,17 +2079,18 @@ function mergeRefs(...refs) {
     });
   };
 }
-
-// lib/dom/lib.tsx
-var isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined" && typeof window.document.createElement !== "undefined";
+var isBrowser2 = typeof window !== "undefined" && typeof window.document !== "undefined" && typeof window.document.createElement !== "undefined";
 try {
-  if (isBrowser) {
-    window.__reactRouterVersion = "7.6.1";
+  if (isBrowser2) {
+    window.__reactRouterVersion =
+    // @ts-expect-error
+    "7.13.1";
   }
 } catch (e) {}
 function HashRouter({
   basename,
   children,
+  unstable_useTransitions,
   window: window2
 }) {
   let historyRef = reactExports.useRef();
@@ -2292,15 +2106,20 @@ function HashRouter({
     location: history.location
   });
   let setState = reactExports.useCallback(newState => {
-    reactExports.startTransition(() => setStateImpl(newState));
-  }, [setStateImpl]);
+    if (unstable_useTransitions === false) {
+      setStateImpl(newState);
+    } else {
+      reactExports.startTransition(() => setStateImpl(newState));
+    }
+  }, [unstable_useTransitions]);
   reactExports.useLayoutEffect(() => history.listen(setState), [history, setState]);
   return /* @__PURE__ */reactExports.createElement(Router, {
     basename,
     children,
     location: state.location,
     navigationType: state.action,
-    navigator: history
+    navigator: history,
+    unstable_useTransitions
   });
 }
 var ABSOLUTE_URL_REGEX2 = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
@@ -2311,47 +2130,46 @@ var Link$1 = /*#__PURE__*/reactExports.forwardRef(function LinkWithRef({
   relative,
   reloadDocument,
   replace: replace2,
+  unstable_mask,
   state,
   target,
   to,
   preventScrollReset,
   viewTransition,
+  unstable_defaultShouldRevalidate,
   ...rest
 }, forwardedRef) {
   let {
-    basename
+    basename,
+    navigator,
+    unstable_useTransitions
   } = reactExports.useContext(NavigationContext);
   let isAbsolute = typeof to === "string" && ABSOLUTE_URL_REGEX2.test(to);
-  let absoluteHref;
-  let isExternal = false;
-  if (typeof to === "string" && isAbsolute) {
-    absoluteHref = to;
-    if (isBrowser) {
-      try {
-        let currentUrl = new URL(window.location.href);
-        let targetUrl = to.startsWith("//") ? new URL(currentUrl.protocol + to) : new URL(to);
-        let path = stripBasename(targetUrl.pathname, basename);
-        if (targetUrl.origin === currentUrl.origin && path != null) {
-          to = path + targetUrl.search + targetUrl.hash;
-        } else {
-          isExternal = true;
-        }
-      } catch (e) {
-        warning(false, `<Link to="${to}"> contains an invalid URL which will probably break when clicked - please update to a valid URL path.`);
-      }
-    }
-  }
-  let href2 = useHref(to, {
+  let parsed = parseToInfo(to, basename);
+  to = parsed.to;
+  let href = useHref(to, {
     relative
   });
+  let location = useLocation();
+  let maskedHref = null;
+  if (unstable_mask) {
+    let resolved = resolveTo(unstable_mask, [], location.unstable_mask ? location.unstable_mask.pathname : "/", true);
+    if (basename !== "/") {
+      resolved.pathname = resolved.pathname === "/" ? basename : joinPaths([basename, resolved.pathname]);
+    }
+    maskedHref = navigator.createHref(resolved);
+  }
   let [shouldPrefetch, prefetchRef, prefetchHandlers] = usePrefetchBehavior(prefetch, rest);
   let internalOnClick = useLinkClickHandler(to, {
     replace: replace2,
+    unstable_mask,
     state,
     target,
     preventScrollReset,
     relative,
-    viewTransition
+    viewTransition,
+    unstable_defaultShouldRevalidate,
+    unstable_useTransitions
   });
   function handleClick(event) {
     if (onClick) onClick(event);
@@ -2359,20 +2177,21 @@ var Link$1 = /*#__PURE__*/reactExports.forwardRef(function LinkWithRef({
       internalOnClick(event);
     }
   }
+  let isSpaLink = !(parsed.isExternal || reloadDocument);
   let link =
   // eslint-disable-next-line jsx-a11y/anchor-has-content
   /* @__PURE__ */
   reactExports.createElement("a", {
     ...rest,
     ...prefetchHandlers,
-    href: absoluteHref || href2,
-    onClick: isExternal || reloadDocument ? onClick : handleClick,
+    href: (isSpaLink ? maskedHref : void 0) || parsed.absoluteURL || href,
+    onClick: isSpaLink ? handleClick : onClick,
     ref: mergeRefs(forwardedRef, prefetchRef),
     target,
     "data-discover": !isAbsolute && discover === "render" ? "true" : void 0
   });
   return shouldPrefetch && !isAbsolute ? /* @__PURE__ */reactExports.createElement(reactExports.Fragment, null, link, /* @__PURE__ */reactExports.createElement(PrefetchPageLinks, {
-    page: href2
+    page: href
   })) : link;
 });
 Link$1.displayName = "Link";
@@ -2451,8 +2270,12 @@ var Form = /*#__PURE__*/reactExports.forwardRef(({
   relative,
   preventScrollReset,
   viewTransition,
+  unstable_defaultShouldRevalidate,
   ...props
 }, forwardedRef) => {
+  let {
+    unstable_useTransitions
+  } = reactExports.useContext(NavigationContext);
   let submit = useSubmit();
   let formAction = useFormAction(action, {
     relative
@@ -2465,7 +2288,7 @@ var Form = /*#__PURE__*/reactExports.forwardRef(({
     event.preventDefault();
     let submitter = event.nativeEvent.submitter;
     let submitMethod = submitter?.getAttribute("formmethod") || method;
-    submit(submitter || event.currentTarget, {
+    let doSubmit = () => submit(submitter || event.currentTarget, {
       fetcherKey,
       method: submitMethod,
       navigate,
@@ -2473,8 +2296,14 @@ var Form = /*#__PURE__*/reactExports.forwardRef(({
       state,
       relative,
       preventScrollReset,
-      viewTransition
+      viewTransition,
+      unstable_defaultShouldRevalidate
     });
+    if (unstable_useTransitions && navigate !== false) {
+      reactExports.startTransition(() => doSubmit());
+    } else {
+      doSubmit();
+    }
   };
   return /* @__PURE__ */reactExports.createElement("form", {
     ref: forwardedRef,
@@ -2497,10 +2326,13 @@ function useDataRouterContext3(hookName) {
 function useLinkClickHandler(to, {
   target,
   replace: replaceProp,
+  unstable_mask,
   state,
   preventScrollReset,
   relative,
-  viewTransition
+  viewTransition,
+  unstable_defaultShouldRevalidate,
+  unstable_useTransitions
 } = {}) {
   let navigate = useNavigate();
   let location = useLocation();
@@ -2511,15 +2343,22 @@ function useLinkClickHandler(to, {
     if (shouldProcessLinkClick(event, target)) {
       event.preventDefault();
       let replace2 = replaceProp !== void 0 ? replaceProp : createPath(location) === createPath(path);
-      navigate(to, {
+      let doNavigate = () => navigate(to, {
         replace: replace2,
+        unstable_mask,
         state,
         preventScrollReset,
         relative,
-        viewTransition
+        viewTransition,
+        unstable_defaultShouldRevalidate
       });
+      if (unstable_useTransitions) {
+        reactExports.startTransition(() => doNavigate());
+      } else {
+        doNavigate();
+      }
     }
-  }, [location, navigate, path, replaceProp, state, target, to, preventScrollReset, relative, viewTransition]);
+  }, [location, navigate, path, replaceProp, unstable_mask, state, target, to, preventScrollReset, relative, viewTransition, unstable_defaultShouldRevalidate, unstable_useTransitions]);
 }
 var fetcherId = 0;
 var getUniqueFetcherId = () => `__${String(++fetcherId)}__`;
@@ -2531,6 +2370,8 @@ function useSubmit() {
     basename
   } = reactExports.useContext(NavigationContext);
   let currentRouteId = useRouteId();
+  let routerFetch = router.fetch;
+  let routerNavigate = router.navigate;
   return reactExports.useCallback(async (target, options = {}) => {
     let {
       action,
@@ -2541,7 +2382,8 @@ function useSubmit() {
     } = getFormSubmissionInfo(target, basename);
     if (options.navigate === false) {
       let key = options.fetcherKey || getUniqueFetcherId();
-      await router.fetch(key, currentRouteId, options.action || action, {
+      await routerFetch(key, currentRouteId, options.action || action, {
+        unstable_defaultShouldRevalidate: options.unstable_defaultShouldRevalidate,
         preventScrollReset: options.preventScrollReset,
         formData,
         body,
@@ -2550,7 +2392,8 @@ function useSubmit() {
         flushSync: options.flushSync
       });
     } else {
-      await router.navigate(options.action || action, {
+      await routerNavigate(options.action || action, {
+        unstable_defaultShouldRevalidate: options.unstable_defaultShouldRevalidate,
         preventScrollReset: options.preventScrollReset,
         formData,
         body,
@@ -2563,7 +2406,7 @@ function useSubmit() {
         viewTransition: options.viewTransition
       });
     }
-  }, [router, basename, currentRouteId]);
+  }, [routerFetch, routerNavigate, basename, currentRouteId]);
 }
 function useFormAction(action, {
   relative
@@ -2600,14 +2443,16 @@ function useFormAction(action, {
   }
   return createPath(path);
 }
-function useViewTransitionState(to, opts = {}) {
+function useViewTransitionState(to, {
+  relative
+} = {}) {
   let vtContext = reactExports.useContext(ViewTransitionContext);
   invariant(vtContext != null, "`useViewTransitionState` must be used within `react-router-dom`'s `RouterProvider`.  Did you accidentally import `RouterProvider` from `react-router`?");
   let {
     basename
   } = useDataRouterContext3("useViewTransitionState" /* useViewTransitionState */);
   let path = useResolvedPath(to, {
-    relative: opts.relative
+    relative
   });
   if (!vtContext.isTransitioning) {
     return false;
@@ -2616,9 +2461,6 @@ function useViewTransitionState(to, opts = {}) {
   let nextPath = stripBasename(vtContext.nextLocation.pathname, basename) || vtContext.nextLocation.pathname;
   return matchPath(path.pathname, nextPath) != null || matchPath(path.pathname, currentPath) != null;
 }
-
-// lib/server-runtime/single-fetch.ts
-/* @__PURE__ */new Set([...NO_BODY_STATUS_CODES, 304]);
 
 var reactDom = {exports: {}};
 
@@ -2843,7 +2685,7 @@ function _v4(options, buf, offset) {
   return unsafeStringify(rnds);
 }
 function v4(options, buf, offset) {
-  if (native.randomUUID && true && true) {
+  if (native.randomUUID && true && !options) {
     return native.randomUUID();
   }
   return _v4(options);
@@ -6344,20 +6186,20 @@ function Home() {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 const t$4 = globalThis,
-  e$b = t$4.ShadowRoot && (void 0 === t$4.ShadyCSS || t$4.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype,
-  s$2 = Symbol(),
-  o$c = new WeakMap();
+  e$a = t$4.ShadowRoot && (void 0 === t$4.ShadyCSS || t$4.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype,
+  s$3 = Symbol(),
+  o$d = new WeakMap();
 let n$9 = class n {
   constructor(t, e, o) {
-    if (this._$cssResult$ = true, o !== s$2) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+    if (this._$cssResult$ = true, o !== s$3) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = t, this.t = e;
   }
   get styleSheet() {
     let t = this.o;
     const s = this.t;
-    if (e$b && void 0 === t) {
+    if (e$a && void 0 === t) {
       const e = void 0 !== s && 1 === s.length;
-      e && (t = o$c.get(s)), void 0 === t && ((this.o = t = new CSSStyleSheet()).replaceSync(this.cssText), e && o$c.set(s, t));
+      e && (t = o$d.get(s)), void 0 === t && ((this.o = t = new CSSStyleSheet()).replaceSync(this.cssText), e && o$d.set(s, t));
     }
     return t;
   }
@@ -6365,23 +6207,23 @@ let n$9 = class n {
     return this.cssText;
   }
 };
-const r$8 = t => new n$9("string" == typeof t ? t : t + "", void 0, s$2),
+const r$8 = t => new n$9("string" == typeof t ? t : t + "", void 0, s$3),
   i$7 = (t, ...e) => {
     const o = 1 === t.length ? t[0] : e.reduce((e, s, o) => e + (t => {
       if (true === t._$cssResult$) return t.cssText;
       if ("number" == typeof t) return t;
       throw Error("Value passed to 'css' function must be a 'css' function result: " + t + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
     })(s) + t[o + 1], t[0]);
-    return new n$9(o, t, s$2);
+    return new n$9(o, t, s$3);
   },
   S$1 = (s, o) => {
-    if (e$b) s.adoptedStyleSheets = o.map(t => t instanceof CSSStyleSheet ? t : t.styleSheet);else for (const e of o) {
+    if (e$a) s.adoptedStyleSheets = o.map(t => t instanceof CSSStyleSheet ? t : t.styleSheet);else for (const e of o) {
       const o = document.createElement("style"),
         n = t$4.litNonce;
       void 0 !== n && o.setAttribute("nonce", n), o.textContent = e.cssText, s.appendChild(o);
     }
   },
-  c$3 = e$b ? t => t : t => t instanceof CSSStyleSheet ? (t => {
+  c$3 = e$a ? t => t : t => t instanceof CSSStyleSheet ? (t => {
     let e = "";
     for (const s of t.cssRules) e += s.cssText;
     return r$8(e);
@@ -6394,22 +6236,22 @@ const r$8 = t => new n$9("string" == typeof t ? t : t + "", void 0, s$2),
  */
 const {
     is: i$6,
-    defineProperty: e$a,
-    getOwnPropertyDescriptor: r$7,
-    getOwnPropertyNames: h$3,
-    getOwnPropertySymbols: o$b,
+    defineProperty: e$9,
+    getOwnPropertyDescriptor: h$3,
+    getOwnPropertyNames: r$7,
+    getOwnPropertySymbols: o$c,
     getPrototypeOf: n$8
   } = Object,
   a$2 = globalThis,
   c$2 = a$2.trustedTypes,
-  l$3 = c$2 ? c$2.emptyScript : "",
-  p$1 = a$2.reactiveElementPolyfillSupport,
+  l$4 = c$2 ? c$2.emptyScript : "",
+  p$2 = a$2.reactiveElementPolyfillSupport,
   d$1 = (t, s) => t,
-  u$3 = {
+  u$2 = {
     toAttribute(t, s) {
       switch (s) {
         case Boolean:
-          t = t ? l$3 : null;
+          t = t ? l$4 : null;
           break;
         case Object:
         case Array:
@@ -6437,34 +6279,35 @@ const {
       return i;
     }
   },
-  f$3 = (t, s) => !i$6(t, s),
-  y$1 = {
+  f$2 = (t, s) => !i$6(t, s),
+  b$1 = {
     attribute: true,
     type: String,
-    converter: u$3,
+    converter: u$2,
     reflect: false,
-    hasChanged: f$3
+    useDefault: false,
+    hasChanged: f$2
   };
 Symbol.metadata ??= Symbol("metadata"), a$2.litPropertyMetadata ??= new WeakMap();
-class b extends HTMLElement {
+let y$1 = class y extends HTMLElement {
   static addInitializer(t) {
     this._$Ei(), (this.l ??= []).push(t);
   }
   static get observedAttributes() {
     return this.finalize(), this._$Eh && [...this._$Eh.keys()];
   }
-  static createProperty(t, s = y$1) {
-    if (s.state && (s.attribute = false), this._$Ei(), this.elementProperties.set(t, s), !s.noAccessor) {
+  static createProperty(t, s = b$1) {
+    if (s.state && (s.attribute = false), this._$Ei(), this.prototype.hasOwnProperty(t) && ((s = Object.create(s)).wrapped = true), this.elementProperties.set(t, s), !s.noAccessor) {
       const i = Symbol(),
-        r = this.getPropertyDescriptor(t, i, s);
-      void 0 !== r && e$a(this.prototype, t, r);
+        h = this.getPropertyDescriptor(t, i, s);
+      void 0 !== h && e$9(this.prototype, t, h);
     }
   }
   static getPropertyDescriptor(t, s, i) {
     const {
       get: e,
-      set: h
-    } = r$7(this.prototype, t) ?? {
+      set: r
+    } = h$3(this.prototype, t) ?? {
       get() {
         return this[s];
       },
@@ -6473,19 +6316,17 @@ class b extends HTMLElement {
       }
     };
     return {
-      get() {
-        return e?.call(this);
-      },
+      get: e,
       set(s) {
-        const r = e?.call(this);
-        h.call(this, s), this.requestUpdate(t, r, i);
+        const h = e?.call(this);
+        r?.call(this, s), this.requestUpdate(t, h, i);
       },
       configurable: true,
       enumerable: true
     };
   }
   static getPropertyOptions(t) {
-    return this.elementProperties.get(t) ?? y$1;
+    return this.elementProperties.get(t) ?? b$1;
   }
   static _$Ei() {
     if (this.hasOwnProperty(d$1("elementProperties"))) return;
@@ -6496,7 +6337,7 @@ class b extends HTMLElement {
     if (this.hasOwnProperty(d$1("finalized"))) return;
     if (this.finalized = true, this._$Ei(), this.hasOwnProperty(d$1("properties"))) {
       const t = this.properties,
-        s = [...h$3(t), ...o$b(t)];
+        s = [...r$7(t), ...o$c(t)];
       for (const i of s) this.createProperty(i, t[i]);
     }
     const t = this[Symbol.metadata];
@@ -6555,12 +6396,12 @@ class b extends HTMLElement {
   attributeChangedCallback(t, s, i) {
     this._$AK(t, i);
   }
-  _$EC(t, s) {
+  _$ET(t, s) {
     const i = this.constructor.elementProperties.get(t),
       e = this.constructor._$Eu(t, i);
     if (void 0 !== e && true === i.reflect) {
-      const r = (void 0 !== i.converter?.toAttribute ? i.converter : u$3).toAttribute(s, i.type);
-      this._$Em = t, null == r ? this.removeAttribute(e) : this.setAttribute(e, r), this._$Em = null;
+      const h = (void 0 !== i.converter?.toAttribute ? i.converter : u$2).toAttribute(s, i.type);
+      this._$Em = t, null == h ? this.removeAttribute(e) : this.setAttribute(e, h), this._$Em = null;
     }
   }
   _$AK(t, s) {
@@ -6568,23 +6409,30 @@ class b extends HTMLElement {
       e = i._$Eh.get(t);
     if (void 0 !== e && this._$Em !== e) {
       const t = i.getPropertyOptions(e),
-        r = "function" == typeof t.converter ? {
+        h = "function" == typeof t.converter ? {
           fromAttribute: t.converter
-        } : void 0 !== t.converter?.fromAttribute ? t.converter : u$3;
-      this._$Em = e, this[e] = r.fromAttribute(s, t.type), this._$Em = null;
+        } : void 0 !== t.converter?.fromAttribute ? t.converter : u$2;
+      this._$Em = e;
+      const r = h.fromAttribute(s, t.type);
+      this[e] = r ?? this._$Ej?.get(e) ?? r, this._$Em = null;
     }
   }
-  requestUpdate(t, s, i) {
+  requestUpdate(t, s, i, e = false, h) {
     if (void 0 !== t) {
-      if (i ??= this.constructor.getPropertyOptions(t), !(i.hasChanged ?? f$3)(this[t], s)) return;
-      this.P(t, s, i);
+      const r = this.constructor;
+      if (false === e && (h = this[t]), i ??= r.getPropertyOptions(t), !((i.hasChanged ?? f$2)(h, s) || i.useDefault && i.reflect && h === this._$Ej?.get(t) && !this.hasAttribute(r._$Eu(t, i)))) return;
+      this.C(t, s, i);
     }
-    false === this.isUpdatePending && (this._$ES = this._$ET());
+    false === this.isUpdatePending && (this._$ES = this._$EP());
   }
-  P(t, s, i) {
-    this._$AL.has(t) || this._$AL.set(t, s), true === i.reflect && this._$Em !== t && (this._$Ej ??= new Set()).add(t);
+  C(t, s, {
+    useDefault: i,
+    reflect: e,
+    wrapped: h
+  }, r) {
+    i && !(this._$Ej ??= new Map()).has(t) && (this._$Ej.set(t, r ?? s ?? this[t]), true !== h || void 0 !== r) || (this._$AL.has(t) || (this.hasUpdated || i || (s = void 0), this._$AL.set(t, s)), true === e && this._$Em !== t && (this._$Eq ??= new Set()).add(t));
   }
-  async _$ET() {
+  async _$EP() {
     this.isUpdatePending = true;
     try {
       await this._$ES;
@@ -6605,14 +6453,20 @@ class b extends HTMLElement {
         this._$Ep = void 0;
       }
       const t = this.constructor.elementProperties;
-      if (t.size > 0) for (const [s, i] of t) true !== i.wrapped || this._$AL.has(s) || void 0 === this[s] || this.P(s, this[s], i);
+      if (t.size > 0) for (const [s, i] of t) {
+        const {
+            wrapped: t
+          } = i,
+          e = this[s];
+        true !== t || this._$AL.has(s) || void 0 === e || this.C(s, void 0, i, e);
+      }
     }
     let t = false;
     const s = this._$AL;
     try {
-      t = this.shouldUpdate(s), t ? (this.willUpdate(s), this._$EO?.forEach(t => t.hostUpdate?.()), this.update(s)) : this._$EU();
+      t = this.shouldUpdate(s), t ? (this.willUpdate(s), this._$EO?.forEach(t => t.hostUpdate?.()), this.update(s)) : this._$EM();
     } catch (s) {
-      throw t = false, this._$EU(), s;
+      throw t = false, this._$EM(), s;
     }
     t && this._$AE(s);
   }
@@ -6620,7 +6474,7 @@ class b extends HTMLElement {
   _$AE(t) {
     this._$EO?.forEach(t => t.hostUpdated?.()), this.hasUpdated || (this.hasUpdated = true, this.firstUpdated(t)), this.updated(t);
   }
-  _$EU() {
+  _$EM() {
     this._$AL = new Map(), this.isUpdatePending = false;
   }
   get updateComplete() {
@@ -6633,16 +6487,16 @@ class b extends HTMLElement {
     return true;
   }
   update(t) {
-    this._$Ej &&= this._$Ej.forEach(t => this._$EC(t, this[t])), this._$EU();
+    this._$Eq &&= this._$Eq.forEach(t => this._$ET(t, this[t])), this._$EM();
   }
   updated(t) {}
   firstUpdated(t) {}
-}
-b.elementStyles = [], b.shadowRootOptions = {
+};
+y$1.elementStyles = [], y$1.shadowRootOptions = {
   mode: "open"
-}, b[d$1("elementProperties")] = new Map(), b[d$1("finalized")] = new Map(), p$1?.({
-  ReactiveElement: b
-}), (a$2.reactiveElementVersions ??= []).push("2.0.4");
+}, y$1[d$1("elementProperties")] = new Map(), y$1[d$1("finalized")] = new Map(), p$2?.({
+  ReactiveElement: y$1
+}), (a$2.reactiveElementVersions ??= []).push("2.1.2");
 
 /**
  * @license
@@ -6650,129 +6504,130 @@ b.elementStyles = [], b.shadowRootOptions = {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 const t$3 = globalThis,
-  i$5 = t$3.trustedTypes,
-  s$1 = i$5 ? i$5.createPolicy("lit-html", {
+  i$5 = t => t,
+  s$2 = t$3.trustedTypes,
+  e$8 = s$2 ? s$2.createPolicy("lit-html", {
     createHTML: t => t
   }) : void 0,
-  e$9 = "$lit$",
-  h$2 = `lit$${Math.random().toFixed(9).slice(2)}$`,
-  o$a = "?" + h$2,
-  n$7 = `<${o$a}>`,
-  r$6 = document,
-  l$2 = () => r$6.createComment(""),
-  c$1 = t => null === t || "object" != typeof t && "function" != typeof t,
-  a$1 = Array.isArray,
-  u$2 = t => a$1(t) || "function" == typeof t?.[Symbol.iterator],
-  d = "[ \t\n\f\r]",
-  f$2 = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,
-  v = /-->/g,
-  _ = />/g,
-  m$1 = RegExp(`>|${d}(?:([^\\s"'>=/]+)(${d}*=${d}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"),
-  p = /'/g,
-  g = /"/g,
-  $ = /^(?:script|style|textarea|title)$/i,
-  y = t => (i, ...s) => ({
+  h$2 = "$lit$",
+  o$b = `lit$${Math.random().toFixed(9).slice(2)}$`,
+  n$7 = "?" + o$b,
+  r$6 = `<${n$7}>`,
+  l$3 = document,
+  c$1 = () => l$3.createComment(""),
+  a$1 = t => null === t || "object" != typeof t && "function" != typeof t,
+  u$1 = Array.isArray,
+  d = t => u$1(t) || "function" == typeof t?.[Symbol.iterator],
+  f$1 = "[ \t\n\f\r]",
+  v = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,
+  _ = /-->/g,
+  m$1 = />/g,
+  p$1 = RegExp(`>|${f$1}(?:([^\\s"'>=/]+)(${f$1}*=${f$1}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"),
+  g = /'/g,
+  $ = /"/g,
+  y = /^(?:script|style|textarea|title)$/i,
+  x = t => (i, ...s) => ({
     _$litType$: t,
     strings: i,
     values: s
   }),
-  x = y(1),
-  T = Symbol.for("lit-noChange"),
-  E = Symbol.for("lit-nothing"),
-  A = new WeakMap(),
-  C = r$6.createTreeWalker(r$6, 129);
-function P(t, i) {
-  if (!a$1(t) || !t.hasOwnProperty("raw")) throw Error("invalid template strings array");
-  return void 0 !== s$1 ? s$1.createHTML(i) : i;
+  b = x(1),
+  E = Symbol.for("lit-noChange"),
+  A = Symbol.for("lit-nothing"),
+  C = new WeakMap(),
+  P = l$3.createTreeWalker(l$3, 129);
+function V(t, i) {
+  if (!u$1(t) || !t.hasOwnProperty("raw")) throw Error("invalid template strings array");
+  return void 0 !== e$8 ? e$8.createHTML(i) : i;
 }
-const V = (t, i) => {
+const N = (t, i) => {
   const s = t.length - 1,
-    o = [];
-  let r,
+    e = [];
+  let n,
     l = 2 === i ? "<svg>" : 3 === i ? "<math>" : "",
-    c = f$2;
+    c = v;
   for (let i = 0; i < s; i++) {
     const s = t[i];
     let a,
       u,
       d = -1,
-      y = 0;
-    for (; y < s.length && (c.lastIndex = y, u = c.exec(s), null !== u);) y = c.lastIndex, c === f$2 ? "!--" === u[1] ? c = v : void 0 !== u[1] ? c = _ : void 0 !== u[2] ? ($.test(u[2]) && (r = RegExp("</" + u[2], "g")), c = m$1) : void 0 !== u[3] && (c = m$1) : c === m$1 ? ">" === u[0] ? (c = r ?? f$2, d = -1) : void 0 === u[1] ? d = -2 : (d = c.lastIndex - u[2].length, a = u[1], c = void 0 === u[3] ? m$1 : '"' === u[3] ? g : p) : c === g || c === p ? c = m$1 : c === v || c === _ ? c = f$2 : (c = m$1, r = void 0);
-    const x = c === m$1 && t[i + 1].startsWith("/>") ? " " : "";
-    l += c === f$2 ? s + n$7 : d >= 0 ? (o.push(a), s.slice(0, d) + e$9 + s.slice(d) + h$2 + x) : s + h$2 + (-2 === d ? i : x);
+      f = 0;
+    for (; f < s.length && (c.lastIndex = f, u = c.exec(s), null !== u);) f = c.lastIndex, c === v ? "!--" === u[1] ? c = _ : void 0 !== u[1] ? c = m$1 : void 0 !== u[2] ? (y.test(u[2]) && (n = RegExp("</" + u[2], "g")), c = p$1) : void 0 !== u[3] && (c = p$1) : c === p$1 ? ">" === u[0] ? (c = n ?? v, d = -1) : void 0 === u[1] ? d = -2 : (d = c.lastIndex - u[2].length, a = u[1], c = void 0 === u[3] ? p$1 : '"' === u[3] ? $ : g) : c === $ || c === g ? c = p$1 : c === _ || c === m$1 ? c = v : (c = p$1, n = void 0);
+    const x = c === p$1 && t[i + 1].startsWith("/>") ? " " : "";
+    l += c === v ? s + r$6 : d >= 0 ? (e.push(a), s.slice(0, d) + h$2 + s.slice(d) + o$b + x) : s + o$b + (-2 === d ? i : x);
   }
-  return [P(t, l + (t[s] || "<?>") + (2 === i ? "</svg>" : 3 === i ? "</math>" : "")), o];
+  return [V(t, l + (t[s] || "<?>") + (2 === i ? "</svg>" : 3 === i ? "</math>" : "")), e];
 };
-class N {
+class S {
   constructor({
     strings: t,
-    _$litType$: s
-  }, n) {
+    _$litType$: i
+  }, e) {
     let r;
     this.parts = [];
-    let c = 0,
+    let l = 0,
       a = 0;
     const u = t.length - 1,
       d = this.parts,
-      [f, v] = V(t, s);
-    if (this.el = N.createElement(f, n), C.currentNode = this.el.content, 2 === s || 3 === s) {
+      [f, v] = N(t, i);
+    if (this.el = S.createElement(f, e), P.currentNode = this.el.content, 2 === i || 3 === i) {
       const t = this.el.content.firstChild;
       t.replaceWith(...t.childNodes);
     }
-    for (; null !== (r = C.nextNode()) && d.length < u;) {
+    for (; null !== (r = P.nextNode()) && d.length < u;) {
       if (1 === r.nodeType) {
-        if (r.hasAttributes()) for (const t of r.getAttributeNames()) if (t.endsWith(e$9)) {
+        if (r.hasAttributes()) for (const t of r.getAttributeNames()) if (t.endsWith(h$2)) {
           const i = v[a++],
-            s = r.getAttribute(t).split(h$2),
+            s = r.getAttribute(t).split(o$b),
             e = /([.?@])?(.*)/.exec(i);
           d.push({
             type: 1,
-            index: c,
+            index: l,
             name: e[2],
             strings: s,
-            ctor: "." === e[1] ? H$1 : "?" === e[1] ? I : "@" === e[1] ? L : k
+            ctor: "." === e[1] ? I : "?" === e[1] ? L : "@" === e[1] ? z : H$1
           }), r.removeAttribute(t);
-        } else t.startsWith(h$2) && (d.push({
+        } else t.startsWith(o$b) && (d.push({
           type: 6,
-          index: c
+          index: l
         }), r.removeAttribute(t));
-        if ($.test(r.tagName)) {
-          const t = r.textContent.split(h$2),
-            s = t.length - 1;
-          if (s > 0) {
-            r.textContent = i$5 ? i$5.emptyScript : "";
-            for (let i = 0; i < s; i++) r.append(t[i], l$2()), C.nextNode(), d.push({
+        if (y.test(r.tagName)) {
+          const t = r.textContent.split(o$b),
+            i = t.length - 1;
+          if (i > 0) {
+            r.textContent = s$2 ? s$2.emptyScript : "";
+            for (let s = 0; s < i; s++) r.append(t[s], c$1()), P.nextNode(), d.push({
               type: 2,
-              index: ++c
+              index: ++l
             });
-            r.append(t[s], l$2());
+            r.append(t[i], c$1());
           }
         }
-      } else if (8 === r.nodeType) if (r.data === o$a) d.push({
+      } else if (8 === r.nodeType) if (r.data === n$7) d.push({
         type: 2,
-        index: c
+        index: l
       });else {
         let t = -1;
-        for (; -1 !== (t = r.data.indexOf(h$2, t + 1));) d.push({
+        for (; -1 !== (t = r.data.indexOf(o$b, t + 1));) d.push({
           type: 7,
-          index: c
-        }), t += h$2.length - 1;
+          index: l
+        }), t += o$b.length - 1;
       }
-      c++;
+      l++;
     }
   }
   static createElement(t, i) {
-    const s = r$6.createElement("template");
+    const s = l$3.createElement("template");
     return s.innerHTML = t, s;
   }
 }
-function S(t, i, s = t, e) {
-  if (i === T) return i;
+function M(t, i, s = t, e) {
+  if (i === E) return i;
   let h = void 0 !== e ? s._$Co?.[e] : s._$Cl;
-  const o = c$1(i) ? void 0 : i._$litDirective$;
-  return h?.constructor !== o && (h?._$AO?.(false), void 0 === o ? h = void 0 : (h = new o(t), h._$AT(t, s, e)), void 0 !== e ? (s._$Co ??= [])[e] = h : s._$Cl = h), void 0 !== h && (i = S(t, h._$AS(t, i.values), h, e)), i;
+  const o = a$1(i) ? void 0 : i._$litDirective$;
+  return h?.constructor !== o && (h?._$AO?.(false), void 0 === o ? h = void 0 : (h = new o(t), h._$AT(t, s, e)), void 0 !== e ? (s._$Co ??= [])[e] = h : s._$Cl = h), void 0 !== h && (i = M(t, h._$AS(t, i.values), h, e)), i;
 }
-class M {
+class R {
   constructor(t, i) {
     this._$AV = [], this._$AN = void 0, this._$AD = t, this._$AM = i;
   }
@@ -6789,32 +6644,32 @@ class M {
         },
         parts: s
       } = this._$AD,
-      e = (t?.creationScope ?? r$6).importNode(i, true);
-    C.currentNode = e;
-    let h = C.nextNode(),
+      e = (t?.creationScope ?? l$3).importNode(i, true);
+    P.currentNode = e;
+    let h = P.nextNode(),
       o = 0,
       n = 0,
-      l = s[0];
-    for (; void 0 !== l;) {
-      if (o === l.index) {
+      r = s[0];
+    for (; void 0 !== r;) {
+      if (o === r.index) {
         let i;
-        2 === l.type ? i = new R(h, h.nextSibling, this, t) : 1 === l.type ? i = new l.ctor(h, l.name, l.strings, this, t) : 6 === l.type && (i = new z(h, this, t)), this._$AV.push(i), l = s[++n];
+        2 === r.type ? i = new k(h, h.nextSibling, this, t) : 1 === r.type ? i = new r.ctor(h, r.name, r.strings, this, t) : 6 === r.type && (i = new Z(h, this, t)), this._$AV.push(i), r = s[++n];
       }
-      o !== l?.index && (h = C.nextNode(), o++);
+      o !== r?.index && (h = P.nextNode(), o++);
     }
-    return C.currentNode = r$6, e;
+    return P.currentNode = l$3, e;
   }
   p(t) {
     let i = 0;
     for (const s of this._$AV) void 0 !== s && (void 0 !== s.strings ? (s._$AI(t, s, i), i += s.strings.length - 2) : s._$AI(t[i])), i++;
   }
 }
-class R {
+class k {
   get _$AU() {
     return this._$AM?._$AU ?? this._$Cv;
   }
   constructor(t, i, s, e) {
-    this.type = 2, this._$AH = E, this._$AN = void 0, this._$AA = t, this._$AB = i, this._$AM = s, this.options = e, this._$Cv = e?.isConnected ?? true;
+    this.type = 2, this._$AH = A, this._$AN = void 0, this._$AA = t, this._$AB = i, this._$AM = s, this.options = e, this._$Cv = e?.isConnected ?? true;
   }
   get parentNode() {
     let t = this._$AA.parentNode;
@@ -6828,7 +6683,7 @@ class R {
     return this._$AB;
   }
   _$AI(t, i = this) {
-    t = S(this, t, i), c$1(t) ? t === E || null == t || "" === t ? (this._$AH !== E && this._$AR(), this._$AH = E) : t !== this._$AH && t !== T && this._(t) : void 0 !== t._$litType$ ? this.$(t) : void 0 !== t.nodeType ? this.T(t) : u$2(t) ? this.k(t) : this._(t);
+    t = M(this, t, i), a$1(t) ? t === A || null == t || "" === t ? (this._$AH !== A && this._$AR(), this._$AH = A) : t !== this._$AH && t !== E && this._(t) : void 0 !== t._$litType$ ? this.$(t) : void 0 !== t.nodeType ? this.T(t) : d(t) ? this.k(t) : this._(t);
   }
   O(t) {
     return this._$AA.parentNode.insertBefore(t, this._$AB);
@@ -6837,43 +6692,43 @@ class R {
     this._$AH !== t && (this._$AR(), this._$AH = this.O(t));
   }
   _(t) {
-    this._$AH !== E && c$1(this._$AH) ? this._$AA.nextSibling.data = t : this.T(r$6.createTextNode(t)), this._$AH = t;
+    this._$AH !== A && a$1(this._$AH) ? this._$AA.nextSibling.data = t : this.T(l$3.createTextNode(t)), this._$AH = t;
   }
   $(t) {
     const {
         values: i,
         _$litType$: s
       } = t,
-      e = "number" == typeof s ? this._$AC(t) : (void 0 === s.el && (s.el = N.createElement(P(s.h, s.h[0]), this.options)), s);
+      e = "number" == typeof s ? this._$AC(t) : (void 0 === s.el && (s.el = S.createElement(V(s.h, s.h[0]), this.options)), s);
     if (this._$AH?._$AD === e) this._$AH.p(i);else {
-      const t = new M(e, this),
+      const t = new R(e, this),
         s = t.u(this.options);
       t.p(i), this.T(s), this._$AH = t;
     }
   }
   _$AC(t) {
-    let i = A.get(t.strings);
-    return void 0 === i && A.set(t.strings, i = new N(t)), i;
+    let i = C.get(t.strings);
+    return void 0 === i && C.set(t.strings, i = new S(t)), i;
   }
   k(t) {
-    a$1(this._$AH) || (this._$AH = [], this._$AR());
+    u$1(this._$AH) || (this._$AH = [], this._$AR());
     const i = this._$AH;
     let s,
       e = 0;
-    for (const h of t) e === i.length ? i.push(s = new R(this.O(l$2()), this.O(l$2()), this, this.options)) : s = i[e], s._$AI(h), e++;
+    for (const h of t) e === i.length ? i.push(s = new k(this.O(c$1()), this.O(c$1()), this, this.options)) : s = i[e], s._$AI(h), e++;
     e < i.length && (this._$AR(s && s._$AB.nextSibling, e), i.length = e);
   }
-  _$AR(t = this._$AA.nextSibling, i) {
-    for (this._$AP?.(false, true, i); t && t !== this._$AB;) {
-      const i = t.nextSibling;
-      t.remove(), t = i;
+  _$AR(t = this._$AA.nextSibling, s) {
+    for (this._$AP?.(false, true, s); t !== this._$AB;) {
+      const s = i$5(t).nextSibling;
+      i$5(t).remove(), t = s;
     }
   }
   setConnected(t) {
     void 0 === this._$AM && (this._$Cv = t, this._$AP?.(t));
   }
 }
-class k {
+let H$1 = class H {
   get tagName() {
     return this.element.tagName;
   }
@@ -6881,54 +6736,54 @@ class k {
     return this._$AM._$AU;
   }
   constructor(t, i, s, e, h) {
-    this.type = 1, this._$AH = E, this._$AN = void 0, this.element = t, this.name = i, this._$AM = e, this.options = h, s.length > 2 || "" !== s[0] || "" !== s[1] ? (this._$AH = Array(s.length - 1).fill(new String()), this.strings = s) : this._$AH = E;
+    this.type = 1, this._$AH = A, this._$AN = void 0, this.element = t, this.name = i, this._$AM = e, this.options = h, s.length > 2 || "" !== s[0] || "" !== s[1] ? (this._$AH = Array(s.length - 1).fill(new String()), this.strings = s) : this._$AH = A;
   }
   _$AI(t, i = this, s, e) {
     const h = this.strings;
     let o = false;
-    if (void 0 === h) t = S(this, t, i, 0), o = !c$1(t) || t !== this._$AH && t !== T, o && (this._$AH = t);else {
+    if (void 0 === h) t = M(this, t, i, 0), o = !a$1(t) || t !== this._$AH && t !== E, o && (this._$AH = t);else {
       const e = t;
       let n, r;
-      for (t = h[0], n = 0; n < h.length - 1; n++) r = S(this, e[s + n], i, n), r === T && (r = this._$AH[n]), o ||= !c$1(r) || r !== this._$AH[n], r === E ? t = E : t !== E && (t += (r ?? "") + h[n + 1]), this._$AH[n] = r;
+      for (t = h[0], n = 0; n < h.length - 1; n++) r = M(this, e[s + n], i, n), r === E && (r = this._$AH[n]), o ||= !a$1(r) || r !== this._$AH[n], r === A ? t = A : t !== A && (t += (r ?? "") + h[n + 1]), this._$AH[n] = r;
     }
     o && !e && this.j(t);
   }
   j(t) {
-    t === E ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
+    t === A ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
   }
-}
-let H$1 = class H extends k {
+};
+class I extends H$1 {
   constructor() {
     super(...arguments), this.type = 3;
   }
   j(t) {
-    this.element[this.name] = t === E ? void 0 : t;
+    this.element[this.name] = t === A ? void 0 : t;
   }
-};
-class I extends k {
+}
+class L extends H$1 {
   constructor() {
     super(...arguments), this.type = 4;
   }
   j(t) {
-    this.element.toggleAttribute(this.name, !!t && t !== E);
+    this.element.toggleAttribute(this.name, !!t && t !== A);
   }
 }
-class L extends k {
+class z extends H$1 {
   constructor(t, i, s, e, h) {
     super(t, i, s, e, h), this.type = 5;
   }
   _$AI(t, i = this) {
-    if ((t = S(this, t, i, 0) ?? E) === T) return;
+    if ((t = M(this, t, i, 0) ?? A) === E) return;
     const s = this._$AH,
-      e = t === E && s !== E || t.capture !== s.capture || t.once !== s.once || t.passive !== s.passive,
-      h = t !== E && (s === E || e);
+      e = t === A && s !== A || t.capture !== s.capture || t.once !== s.once || t.passive !== s.passive,
+      h = t !== A && (s === A || e);
     e && this.element.removeEventListener(this.name, this, s), h && this.element.addEventListener(this.name, this, t), this._$AH = t;
   }
   handleEvent(t) {
     "function" == typeof this._$AH ? this._$AH.call(this.options?.host ?? this.element, t) : this._$AH.handleEvent(t);
   }
 }
-class z {
+class Z {
   constructor(t, i, s) {
     this.element = t, this.type = 6, this._$AN = void 0, this._$AM = i, this.options = s;
   }
@@ -6936,17 +6791,17 @@ class z {
     return this._$AM._$AU;
   }
   _$AI(t) {
-    S(this, t);
+    M(this, t);
   }
 }
-const j = t$3.litHtmlPolyfillSupport;
-j?.(N, R), (t$3.litHtmlVersions ??= []).push("3.2.1");
-const B = (t, i, s) => {
+const B = t$3.litHtmlPolyfillSupport;
+B?.(S, k), (t$3.litHtmlVersions ??= []).push("3.3.2");
+const D = (t, i, s) => {
   const e = s?.renderBefore ?? i;
   let h = e._$litPart$;
   if (void 0 === h) {
     const t = s?.renderBefore ?? null;
-    e._$litPart$ = h = new R(i.insertBefore(l$2(), t), t, void 0, s ?? {});
+    e._$litPart$ = h = new k(i.insertBefore(c$1(), t), t, void 0, s ?? {});
   }
   return h._$AI(t), h;
 };
@@ -6956,7 +6811,8 @@ const B = (t, i, s) => {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-let r$5 = class r extends b {
+const s$1 = globalThis;
+let i$4 = class i extends y$1 {
   constructor() {
     super(...arguments), this.renderOptions = {
       host: this
@@ -6967,8 +6823,8 @@ let r$5 = class r extends b {
     return this.renderOptions.renderBefore ??= t.firstChild, t;
   }
   update(t) {
-    const s = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t), this._$Do = B(s, this.renderRoot, this.renderOptions);
+    const r = this.render();
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t), this._$Do = D(r, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(true);
@@ -6977,17 +6833,17 @@ let r$5 = class r extends b {
     super.disconnectedCallback(), this._$Do?.setConnected(false);
   }
   render() {
-    return T;
+    return E;
   }
 };
-r$5._$litElement$ = true, r$5["finalized"] = true, globalThis.litElementHydrateSupport?.({
-  LitElement: r$5
+i$4._$litElement$ = true, i$4["finalized"] = true, s$1.litElementHydrateSupport?.({
+  LitElement: i$4
 });
-const i$4 = globalThis.litElementPolyfillSupport;
-i$4?.({
-  LitElement: r$5
+const o$a = s$1.litElementPolyfillSupport;
+o$a?.({
+  LitElement: i$4
 });
-(globalThis.litElementVersions ??= []).push("4.1.1");
+(s$1.litElementVersions ??= []).push("4.2.2");
 
 // src/components/visually-hidden/visually-hidden.styles.ts
 var visually_hidden_styles_default = i$7`
@@ -7100,27 +6956,27 @@ var __yieldStar = value => {
 const o$9 = {
     attribute: true,
     type: String,
-    converter: u$3,
+    converter: u$2,
     reflect: false,
-    hasChanged: f$3
+    hasChanged: f$2
   },
-  r$4 = (t = o$9, e, r) => {
+  r$5 = (t = o$9, e, r) => {
     const {
       kind: n,
       metadata: i
     } = r;
     let s = globalThis.litPropertyMetadata.get(i);
-    if (void 0 === s && globalThis.litPropertyMetadata.set(i, s = new Map()), s.set(r.name, t), "accessor" === n) {
+    if (void 0 === s && globalThis.litPropertyMetadata.set(i, s = new Map()), "setter" === n && ((t = Object.create(t)).wrapped = true), s.set(r.name, t), "accessor" === n) {
       const {
         name: o
       } = r;
       return {
         set(r) {
           const n = e.get.call(this);
-          e.set.call(this, r), this.requestUpdate(o, n, t);
+          e.set.call(this, r), this.requestUpdate(o, n, t, true, r);
         },
         init(e) {
-          return void 0 !== e && this.P(o, void 0, t), e;
+          return void 0 !== e && this.C(o, void 0, t, e), e;
         }
       };
     }
@@ -7130,18 +6986,15 @@ const o$9 = {
       } = r;
       return function (r) {
         const n = this[o];
-        e.call(this, r), this.requestUpdate(o, n, t);
+        e.call(this, r), this.requestUpdate(o, n, t, true, r);
       };
     }
     throw Error("Unsupported decorator location: " + n);
   };
 function n$6(t) {
-  return (e, o) => "object" == typeof o ? r$4(t, e, o) : ((t, e, o) => {
+  return (e, o) => "object" == typeof o ? r$5(t, e, o) : ((t, e, o) => {
     const r = e.hasOwnProperty(o);
-    return e.constructor.createProperty(o, r ? {
-      ...t,
-      wrapped: true
-    } : t), r ? Object.getOwnPropertyDescriptor(e, o) : void 0;
+    return e.constructor.createProperty(o, t), r ? Object.getOwnPropertyDescriptor(e, o) : void 0;
   })(t, e, o);
 }
 
@@ -7150,7 +7003,7 @@ function n$6(t) {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-function r$3(r) {
+function r$4(r) {
   return n$6({
     ...r,
     state: true,
@@ -7175,17 +7028,17 @@ function t$2(t) {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const e$8 = (e, t, c) => (c.configurable = true, c.enumerable = true, Reflect.decorate && "object" != typeof t && Object.defineProperty(e, t, c), c);
+const e$7 = (e, t, c) => (c.configurable = true, c.enumerable = true, Reflect.decorate && "object" != typeof t && Object.defineProperty(e, t, c), c);
 
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-function e$7(e, r) {
+function e$6(e, r) {
   return (n, s, i) => {
     const o = t => t.renderRoot?.querySelector(e) ?? null;
-    return e$8(n, s, {
+    return e$7(n, s, {
       get() {
         return o(this);
       }
@@ -7198,8 +7051,8 @@ function e$7(e, r) {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-function r$2(r) {
-  return (n, e) => e$8(n, e, {
+function r$3(r) {
+  return (n, e) => e$7(n, e, {
     async get() {
       return await this.updateComplete, this.renderRoot?.querySelector(r) ?? null;
     }
@@ -7207,7 +7060,7 @@ function r$2(r) {
 }
 
 var _hasRecordedInitialProperties;
-var ShoelaceElement = class extends r$5 {
+var ShoelaceElement = class extends i$4 {
   constructor() {
     super();
     __privateAdd(this, _hasRecordedInitialProperties, false);
@@ -7281,7 +7134,7 @@ __decorateClass([n$6()], ShoelaceElement.prototype, "lang", 2);
 
 var SlVisuallyHidden = class extends ShoelaceElement {
   render() {
-    return x` <slot></slot> `;
+    return b` <slot></slot> `;
   }
 };
 SlVisuallyHidden.styles = [component_styles_default, visually_hidden_styles_default];
@@ -7291,7 +7144,7 @@ SlVisuallyHidden.styles = [component_styles_default, visually_hidden_styles_defa
  * Copyright 2018 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const e$6 = new Set(["children", "localName", "ref", "style", "className"]),
+const e$5 = new Set(["children", "localName", "ref", "style", "className"]),
   n$5 = new WeakMap(),
   t$1 = (e, t, o, l, a) => {
     const s = a?.[t];
@@ -7317,7 +7170,7 @@ const e$6 = new Set(["children", "localName", "ref", "style", "className"]),
           d = n.useRef(null),
           f = {},
           u = {};
-        for (const [n, t] of Object.entries(s)) e$6.has(n) ? f["className" === n ? "class" : n] = t : c.has(n) || n in l.prototype ? u[n] = t : f[n] = t;
+        for (const [n, t] of Object.entries(s)) e$5.has(n) ? f["className" === n ? "class" : n] = t : c.has(n) || n in l.prototype ? u[n] = t : f[n] = t;
         return n.useLayoutEffect(() => {
           if (null === d.current) return;
           const e = new Map();
@@ -7682,10 +7535,10 @@ function watch(propertyName, options) {
  * Copyright 2020 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const e$5 = (o, t) => void 0 !== o?._$litType$ ,
-  f$1 = o => void 0 === o.strings,
-  u$1 = {},
-  m = (o, t = u$1) => o._$AH = t;
+const l$2 = (o, t) => void 0 !== o?._$litType$ ,
+  r$2 = o => void 0 === o.strings,
+  m = {},
+  p = (o, t = m) => o._$AH = t;
 
 var CACHEABLE_ERROR = Symbol();
 var RETRYABLE_ERROR = Symbol();
@@ -7704,7 +7557,7 @@ var SlIcon = class extends ShoelaceElement {
     var _a;
     let fileData;
     if (library == null ? void 0 : library.spriteSheet) {
-      this.svg = x`<svg part="svg">
+      this.svg = b`<svg part="svg">
         <use part="use" href="${url}"></use>
       </svg>`;
       return this.svg;
@@ -7795,7 +7648,7 @@ var SlIcon = class extends ShoelaceElement {
     if (url !== this.getIconSource().url) {
       return;
     }
-    if (e$5(svg)) {
+    if (l$2(svg)) {
       this.svg = svg;
       if (library) {
         await this.updateComplete;
@@ -7823,7 +7676,7 @@ var SlIcon = class extends ShoelaceElement {
   }
 };
 SlIcon.styles = [component_styles_default, icon_styles_default];
-__decorateClass([r$3()], SlIcon.prototype, "svg", 2);
+__decorateClass([r$4()], SlIcon.prototype, "svg", 2);
 __decorateClass([n$6({
   reflect: true
 })], SlIcon.prototype, "name", 2);
@@ -7889,7 +7742,7 @@ const e$3 = e$4(class extends i$3 {
       const s = !!i[t];
       s === this.st.has(t) || this.nt?.has(t) || (s ? (r.add(t), this.st.add(t)) : (r.remove(t), this.st.delete(t)));
     }
-    return T;
+    return E;
   }
 });
 
@@ -7928,14 +7781,14 @@ const a = Symbol.for(""),
     }
     return t(r, ...e);
   },
-  u = n$4(x);
+  u = n$4(b);
 
 /**
  * @license
  * Copyright 2018 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const o$6 = o => o ?? E;
+const o$6 = o => o ?? A;
 
 var SlIconButton = class extends ShoelaceElement {
   constructor() {
@@ -8010,8 +7863,8 @@ SlIconButton.styles = [component_styles_default, icon_button_styles_default];
 SlIconButton.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".icon-button")], SlIconButton.prototype, "button", 2);
-__decorateClass([r$3()], SlIconButton.prototype, "hasFocus", 2);
+__decorateClass([e$6(".icon-button")], SlIconButton.prototype, "button", 2);
+__decorateClass([r$4()], SlIconButton.prototype, "hasFocus", 2);
 __decorateClass([n$6()], SlIconButton.prototype, "name", 2);
 __decorateClass([n$6()], SlIconButton.prototype, "library", 2);
 __decorateClass([n$6()], SlIconButton.prototype, "src", 2);
@@ -8216,7 +8069,7 @@ var SlTab = class extends ShoelaceElement {
   }
   render() {
     this.id = this.id.length > 0 ? this.id : this.componentId;
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -8227,7 +8080,7 @@ var SlTab = class extends ShoelaceElement {
     })}
       >
         <slot></slot>
-        ${this.closable ? x`
+        ${this.closable ? b`
               <sl-icon-button
                 part="close-button"
                 exportparts="base:close-button__base"
@@ -8247,7 +8100,7 @@ SlTab.styles = [component_styles_default, tab_styles_default];
 SlTab.dependencies = {
   "sl-icon-button": SlIconButton
 };
-__decorateClass([e$7(".tab")], SlTab.prototype, "tab", 2);
+__decorateClass([e$6(".tab")], SlTab.prototype, "tab", 2);
 __decorateClass([n$6({
   reflect: true
 })], SlTab.prototype, "panel", 2);
@@ -8580,7 +8433,7 @@ var SlResizeObserver = class extends ShoelaceElement {
     }
   }
   render() {
-    return x` <slot @slotchange=${this.handleSlotChange}></slot> `;
+    return b` <slot @slotchange=${this.handleSlotChange}></slot> `;
   }
 };
 SlResizeObserver.styles = [component_styles_default, resize_observer_styles_default];
@@ -8991,7 +8844,7 @@ var SlTabGroup = class extends ShoelaceElement {
   }
   render() {
     const isRtl = this.localize.dir() === "rtl";
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -9007,7 +8860,7 @@ var SlTabGroup = class extends ShoelaceElement {
         @keydown=${this.handleKeyDown}
       >
         <div class="tab-group__nav-container" part="nav">
-          ${this.hasScrollControls ? x`
+          ${this.hasScrollControls ? b`
                 <sl-icon-button
                   part="scroll-button scroll-button--start"
                   exportparts="base:scroll-button__base"
@@ -9034,7 +8887,7 @@ var SlTabGroup = class extends ShoelaceElement {
             </div>
           </div>
 
-          ${this.hasScrollControls ? x`
+          ${this.hasScrollControls ? b`
                 <sl-icon-button
                   part="scroll-button scroll-button--end"
                   exportparts="base:scroll-button__base"
@@ -9063,13 +8916,13 @@ SlTabGroup.dependencies = {
   "sl-icon-button": SlIconButton,
   "sl-resize-observer": SlResizeObserver
 };
-__decorateClass([e$7(".tab-group")], SlTabGroup.prototype, "tabGroup", 2);
-__decorateClass([e$7(".tab-group__body")], SlTabGroup.prototype, "body", 2);
-__decorateClass([e$7(".tab-group__nav")], SlTabGroup.prototype, "nav", 2);
-__decorateClass([e$7(".tab-group__indicator")], SlTabGroup.prototype, "indicator", 2);
-__decorateClass([r$3()], SlTabGroup.prototype, "hasScrollControls", 2);
-__decorateClass([r$3()], SlTabGroup.prototype, "shouldHideScrollStartButton", 2);
-__decorateClass([r$3()], SlTabGroup.prototype, "shouldHideScrollEndButton", 2);
+__decorateClass([e$6(".tab-group")], SlTabGroup.prototype, "tabGroup", 2);
+__decorateClass([e$6(".tab-group__body")], SlTabGroup.prototype, "body", 2);
+__decorateClass([e$6(".tab-group__nav")], SlTabGroup.prototype, "nav", 2);
+__decorateClass([e$6(".tab-group__indicator")], SlTabGroup.prototype, "indicator", 2);
+__decorateClass([r$4()], SlTabGroup.prototype, "hasScrollControls", 2);
+__decorateClass([r$4()], SlTabGroup.prototype, "shouldHideScrollStartButton", 2);
+__decorateClass([r$4()], SlTabGroup.prototype, "shouldHideScrollEndButton", 2);
 __decorateClass([n$6()], SlTabGroup.prototype, "placement", 2);
 __decorateClass([n$6()], SlTabGroup.prototype, "activation", 2);
 __decorateClass([n$6({
@@ -9140,7 +8993,7 @@ var SlTabPanel = class extends ShoelaceElement {
     this.setAttribute("aria-hidden", this.active ? "false" : "true");
   }
   render() {
-    return x`
+    return b`
       <slot
         part="base"
         class=${e$3({
@@ -9301,7 +9154,7 @@ var SlTag = class extends ShoelaceElement {
     this.emit("sl-remove");
   }
   render() {
-    return x`
+    return b`
       <span
         part="base"
         class=${e$3({
@@ -9324,7 +9177,7 @@ var SlTag = class extends ShoelaceElement {
       >
         <slot part="content" class="tag__content"></slot>
 
-        ${this.removable ? x`
+        ${this.removable ? b`
               <sl-icon-button
                 part="remove-button"
                 exportparts="base:remove-button__base"
@@ -9557,8 +9410,8 @@ var defaultValue = (propertyName = "value") => (proto, key) => {
     const options = ctor.getPropertyOptions(propertyName);
     const attributeName = typeof options.attribute === "string" ? options.attribute : propertyName;
     if (name === attributeName) {
-      const converter = options.converter || u$3;
-      const fromAttribute = typeof converter === "function" ? converter : (_a = converter == null ? void 0 : converter.fromAttribute) != null ? _a : u$3.fromAttribute;
+      const converter = options.converter || u$2;
+      const fromAttribute = typeof converter === "function" ? converter : (_a = converter == null ? void 0 : converter.fromAttribute) != null ? _a : u$2.fromAttribute;
       const newValue = fromAttribute(value, options.type);
       if (this[propertyName] !== newValue) {
         this[key] = newValue;
@@ -9985,21 +9838,21 @@ function getTextContent(slot) {
 const l = e$4(class extends i$3 {
   constructor(r) {
     if (super(r), r.type !== t.PROPERTY && r.type !== t.ATTRIBUTE && r.type !== t.BOOLEAN_ATTRIBUTE) throw Error("The `live` directive is not allowed on child or event bindings");
-    if (!f$1(r)) throw Error("`live` bindings can only contain a single expression");
+    if (!r$2(r)) throw Error("`live` bindings can only contain a single expression");
   }
   render(r) {
     return r;
   }
   update(i, [t$1]) {
-    if (t$1 === T || t$1 === E) return t$1;
+    if (t$1 === E || t$1 === A) return t$1;
     const o = i.element,
       l = i.name;
     if (i.type === t.PROPERTY) {
-      if (t$1 === o[l]) return T;
+      if (t$1 === o[l]) return E;
     } else if (i.type === t.BOOLEAN_ATTRIBUTE) {
-      if (!!t$1 === o.hasAttribute(l)) return T;
-    } else if (i.type === t.ATTRIBUTE && o.getAttribute(l) === t$1 + "") return T;
-    return m(i), t$1;
+      if (!!t$1 === o.hasAttribute(l)) return E;
+    } else if (i.type === t.ATTRIBUTE && o.getAttribute(l) === t$1 + "") return E;
+    return p(i), t$1;
   }
 });
 
@@ -10155,7 +10008,7 @@ var SlTextarea = class extends ShoelaceElement {
     const hasHelpTextSlot = this.hasSlotController.test("help-text");
     const hasLabel = this.label ? true : !!hasLabelSlot;
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
-    return x`
+    return b`
       <div
         part="form-control"
         class=${e$3({
@@ -10239,9 +10092,9 @@ var SlTextarea = class extends ShoelaceElement {
   }
 };
 SlTextarea.styles = [component_styles_default, form_control_styles_default, textarea_styles_default];
-__decorateClass([e$7(".textarea__control")], SlTextarea.prototype, "input", 2);
-__decorateClass([e$7(".textarea__size-adjuster")], SlTextarea.prototype, "sizeAdjuster", 2);
-__decorateClass([r$3()], SlTextarea.prototype, "hasFocus", 2);
+__decorateClass([e$6(".textarea__control")], SlTextarea.prototype, "input", 2);
+__decorateClass([e$6(".textarea__size-adjuster")], SlTextarea.prototype, "sizeAdjuster", 2);
+__decorateClass([r$4()], SlTextarea.prototype, "hasFocus", 2);
 __decorateClass([n$6()], SlTextarea.prototype, "title", 2);
 __decorateClass([n$6()], SlTextarea.prototype, "name", 2);
 __decorateClass([n$6()], SlTextarea.prototype, "value", 2);
@@ -10460,10 +10313,6 @@ const oppositeSideMap = {
   bottom: 'top',
   top: 'bottom'
 };
-const oppositeAlignmentMap = {
-  start: 'end',
-  end: 'start'
-};
 function clamp$1(start, value, end) {
   return max(start, min(value, end));
 }
@@ -10483,7 +10332,8 @@ function getAxisLength(axis) {
   return axis === 'y' ? 'height' : 'width';
 }
 function getSideAxis(placement) {
-  return ['top', 'bottom'].includes(getSide(placement)) ? 'y' : 'x';
+  const firstChar = placement[0];
+  return firstChar === 't' || firstChar === 'b' ? 'y' : 'x';
 }
 function getAlignmentAxis(placement) {
   return getOppositeAxis(getSideAxis(placement));
@@ -10506,21 +10356,21 @@ function getExpandedPlacements(placement) {
   return [getOppositeAlignmentPlacement(placement), oppositePlacement, getOppositeAlignmentPlacement(oppositePlacement)];
 }
 function getOppositeAlignmentPlacement(placement) {
-  return placement.replace(/start|end/g, alignment => oppositeAlignmentMap[alignment]);
+  return placement.includes('start') ? placement.replace('start', 'end') : placement.replace('end', 'start');
 }
+const lrPlacement = ['left', 'right'];
+const rlPlacement = ['right', 'left'];
+const tbPlacement = ['top', 'bottom'];
+const btPlacement = ['bottom', 'top'];
 function getSideList(side, isStart, rtl) {
-  const lr = ['left', 'right'];
-  const rl = ['right', 'left'];
-  const tb = ['top', 'bottom'];
-  const bt = ['bottom', 'top'];
   switch (side) {
     case 'top':
     case 'bottom':
-      if (rtl) return isStart ? rl : lr;
-      return isStart ? lr : rl;
+      if (rtl) return isStart ? rlPlacement : lrPlacement;
+      return isStart ? lrPlacement : rlPlacement;
     case 'left':
     case 'right':
-      return isStart ? tb : bt;
+      return isStart ? tbPlacement : btPlacement;
     default:
       return [];
   }
@@ -10537,7 +10387,8 @@ function getOppositeAxisPlacements(placement, flipAlignment, direction, rtl) {
   return list;
 }
 function getOppositePlacement(placement) {
-  return placement.replace(/left|right|bottom|top/g, side => oppositeSideMap[side]);
+  const side = getSide(placement);
+  return oppositeSideMap[side] + placement.slice(side.length);
 }
 function expandPaddingObject(padding) {
   return {
@@ -10632,97 +10483,6 @@ function computeCoordsFromPlacement(_ref, placement, rtl) {
 }
 
 /**
- * Computes the `x` and `y` coordinates that will place the floating element
- * next to a given reference element.
- *
- * This export does not have any `platform` interface logic. You will need to
- * write one for the platform you are using Floating UI with.
- */
-const computePosition$1 = async (reference, floating, config) => {
-  const {
-    placement = 'bottom',
-    strategy = 'absolute',
-    middleware = [],
-    platform
-  } = config;
-  const validMiddleware = middleware.filter(Boolean);
-  const rtl = await (platform.isRTL == null ? void 0 : platform.isRTL(floating));
-  let rects = await platform.getElementRects({
-    reference,
-    floating,
-    strategy
-  });
-  let {
-    x,
-    y
-  } = computeCoordsFromPlacement(rects, placement, rtl);
-  let statefulPlacement = placement;
-  let middlewareData = {};
-  let resetCount = 0;
-  for (let i = 0; i < validMiddleware.length; i++) {
-    const {
-      name,
-      fn
-    } = validMiddleware[i];
-    const {
-      x: nextX,
-      y: nextY,
-      data,
-      reset
-    } = await fn({
-      x,
-      y,
-      initialPlacement: placement,
-      placement: statefulPlacement,
-      strategy,
-      middlewareData,
-      rects,
-      platform,
-      elements: {
-        reference,
-        floating
-      }
-    });
-    x = nextX != null ? nextX : x;
-    y = nextY != null ? nextY : y;
-    middlewareData = {
-      ...middlewareData,
-      [name]: {
-        ...middlewareData[name],
-        ...data
-      }
-    };
-    if (reset && resetCount <= 50) {
-      resetCount++;
-      if (typeof reset === 'object') {
-        if (reset.placement) {
-          statefulPlacement = reset.placement;
-        }
-        if (reset.rects) {
-          rects = reset.rects === true ? await platform.getElementRects({
-            reference,
-            floating,
-            strategy
-          }) : reset.rects;
-        }
-        ({
-          x,
-          y
-        } = computeCoordsFromPlacement(rects, statefulPlacement, rtl));
-      }
-      i = -1;
-    }
-  }
-  return {
-    x,
-    y,
-    placement: statefulPlacement,
-    strategy,
-    middlewareData
-  };
-};
-
-/**
  * Resolves with an object of overflow side offsets that determine how much the
  * element is overflowing a given clipping boundary on each side.
  * - positive = overflowing the boundary by that number of pixels
@@ -10786,6 +10546,104 @@ async function detectOverflow(state, options) {
     right: (elementClientRect.right - clippingClientRect.right + paddingObject.right) / offsetScale.x
   };
 }
+
+// Maximum number of resets that can occur before bailing to avoid infinite reset loops.
+const MAX_RESET_COUNT = 50;
+
+/**
+ * Computes the `x` and `y` coordinates that will place the floating element
+ * next to a given reference element.
+ *
+ * This export does not have any `platform` interface logic. You will need to
+ * write one for the platform you are using Floating UI with.
+ */
+const computePosition$1 = async (reference, floating, config) => {
+  const {
+    placement = 'bottom',
+    strategy = 'absolute',
+    middleware = [],
+    platform
+  } = config;
+  const platformWithDetectOverflow = platform.detectOverflow ? platform : {
+    ...platform,
+    detectOverflow
+  };
+  const rtl = await (platform.isRTL == null ? void 0 : platform.isRTL(floating));
+  let rects = await platform.getElementRects({
+    reference,
+    floating,
+    strategy
+  });
+  let {
+    x,
+    y
+  } = computeCoordsFromPlacement(rects, placement, rtl);
+  let statefulPlacement = placement;
+  let resetCount = 0;
+  const middlewareData = {};
+  for (let i = 0; i < middleware.length; i++) {
+    const currentMiddleware = middleware[i];
+    if (!currentMiddleware) {
+      continue;
+    }
+    const {
+      name,
+      fn
+    } = currentMiddleware;
+    const {
+      x: nextX,
+      y: nextY,
+      data,
+      reset
+    } = await fn({
+      x,
+      y,
+      initialPlacement: placement,
+      placement: statefulPlacement,
+      strategy,
+      middlewareData,
+      rects,
+      platform: platformWithDetectOverflow,
+      elements: {
+        reference,
+        floating
+      }
+    });
+    x = nextX != null ? nextX : x;
+    y = nextY != null ? nextY : y;
+    middlewareData[name] = {
+      ...middlewareData[name],
+      ...data
+    };
+    if (reset && resetCount < MAX_RESET_COUNT) {
+      resetCount++;
+      if (typeof reset === 'object') {
+        if (reset.placement) {
+          statefulPlacement = reset.placement;
+        }
+        if (reset.rects) {
+          rects = reset.rects === true ? await platform.getElementRects({
+            reference,
+            floating,
+            strategy
+          }) : reset.rects;
+        }
+        ({
+          x,
+          y
+        } = computeCoordsFromPlacement(rects, statefulPlacement, rtl));
+      }
+      i = -1;
+    }
+  }
+  return {
+    x,
+    y,
+    placement: statefulPlacement,
+    strategy,
+    middlewareData
+  };
+};
 
 /**
  * Provides data to position an inner element of the floating element so that it
@@ -10919,7 +10777,7 @@ const flip$2 = function (options) {
         fallbackPlacements.push(...getOppositeAxisPlacements(initialPlacement, flipAlignment, fallbackAxisSideDirection, rtl));
       }
       const placements = [initialPlacement, ...fallbackPlacements];
-      const overflow = await detectOverflow(state, detectOverflowOptions);
+      const overflow = await platform.detectOverflow(state, detectOverflowOptions);
       const overflows = [];
       let overflowsData = ((_middlewareData$flip = middlewareData.flip) == null ? void 0 : _middlewareData$flip.overflows) || [];
       if (checkMainAxis) {
@@ -10940,16 +10798,22 @@ const flip$2 = function (options) {
         const nextIndex = (((_middlewareData$flip2 = middlewareData.flip) == null ? void 0 : _middlewareData$flip2.index) || 0) + 1;
         const nextPlacement = placements[nextIndex];
         if (nextPlacement) {
-          // Try next placement and re-run the lifecycle.
-          return {
-            data: {
-              index: nextIndex,
-              overflows: overflowsData
-            },
-            reset: {
-              placement: nextPlacement
-            }
-          };
+          const ignoreCrossAxisOverflow = checkCrossAxis === 'alignment' ? initialSideAxis !== getSideAxis(nextPlacement) : false;
+          if (!ignoreCrossAxisOverflow ||
+          // We leave the current main axis only if every placement on that axis
+          // overflows the main axis.
+          overflowsData.every(d => getSideAxis(d.placement) === initialSideAxis ? d.overflows[0] > 0 : true)) {
+            // Try next placement and re-run the lifecycle.
+            return {
+              data: {
+                index: nextIndex,
+                overflows: overflowsData
+              },
+              reset: {
+                placement: nextPlacement
+              }
+            };
+          }
         }
 
         // First, find the candidates that fit on the mainAxis side of overflow,
@@ -10994,6 +10858,7 @@ const flip$2 = function (options) {
     }
   };
 };
+const originSides = /*#__PURE__*/new Set(['left', 'top']);
 
 // For type backwards-compatibility, the `OffsetOptions` type was also
 // Derivable.
@@ -11008,7 +10873,7 @@ async function convertValueToCoords(state, options) {
   const side = getSide(placement);
   const alignment = getAlignment(placement);
   const isVertical = getSideAxis(placement) === 'y';
-  const mainAxisMulti = ['left', 'top'].includes(side) ? -1 : 1;
+  const mainAxisMulti = originSides.has(side) ? -1 : 1;
   const crossAxisMulti = rtl && isVertical ? -1 : 1;
   const rawValue = evaluate(options, state);
 
@@ -11095,7 +10960,8 @@ const shift$1 = function (options) {
       const {
         x,
         y,
-        placement
+        placement,
+        platform
       } = state;
       const {
         mainAxis: checkMainAxis = true,
@@ -11118,7 +10984,7 @@ const shift$1 = function (options) {
         x,
         y
       };
-      const overflow = await detectOverflow(state, detectOverflowOptions);
+      const overflow = await platform.detectOverflow(state, detectOverflowOptions);
       const crossAxis = getSideAxis(getSide(placement));
       const mainAxis = getOppositeAxis(crossAxis);
       let mainAxisCoord = coords[mainAxis];
@@ -11182,7 +11048,7 @@ const size$1 = function (options) {
         apply = () => {},
         ...detectOverflowOptions
       } = evaluate(options, state);
-      const overflow = await detectOverflow(state, detectOverflowOptions);
+      const overflow = await platform.detectOverflow(state, detectOverflowOptions);
       const side = getSide(placement);
       const alignment = getAlignment(placement);
       const isYAxis = getSideAxis(placement) === 'y';
@@ -11292,26 +11158,35 @@ function isOverflowElement(element) {
     overflowY,
     display
   } = getComputedStyle$1(element);
-  return /auto|scroll|overlay|hidden|clip/.test(overflow + overflowY + overflowX) && !['inline', 'contents'].includes(display);
+  return /auto|scroll|overlay|hidden|clip/.test(overflow + overflowY + overflowX) && display !== 'inline' && display !== 'contents';
 }
 function isTableElement(element) {
-  return ['table', 'td', 'th'].includes(getNodeName(element));
+  return /^(table|td|th)$/.test(getNodeName(element));
 }
 function isTopLayer(element) {
-  return [':popover-open', ':modal'].some(selector => {
-    try {
-      return element.matches(selector);
-    } catch (e) {
-      return false;
+  try {
+    if (element.matches(':popover-open')) {
+      return true;
     }
-  });
+  } catch (_e) {
+    // no-op
+  }
+  try {
+    return element.matches(':modal');
+  } catch (_e) {
+    return false;
+  }
 }
+const willChangeRe = /transform|translate|scale|rotate|perspective|filter/;
+const containRe = /paint|layout|strict|content/;
+const isNotNone = value => !!value && value !== 'none';
+let isWebKitValue;
 function isContainingBlock(elementOrCss) {
-  const webkit = isWebKit();
   const css = isElement(elementOrCss) ? getComputedStyle$1(elementOrCss) : elementOrCss;
 
   // https://developer.mozilla.org/en-US/docs/Web/CSS/Containing_block#identifying_the_containing_block
-  return css.transform !== 'none' || css.perspective !== 'none' || (css.containerType ? css.containerType !== 'normal' : false) || !webkit && (css.backdropFilter ? css.backdropFilter !== 'none' : false) || !webkit && (css.filter ? css.filter !== 'none' : false) || ['transform', 'perspective', 'filter'].some(value => (css.willChange || '').includes(value)) || ['paint', 'layout', 'strict', 'content'].some(value => (css.contain || '').includes(value));
+  // https://drafts.csswg.org/css-transforms-2/#individual-transforms
+  return isNotNone(css.transform) || isNotNone(css.translate) || isNotNone(css.scale) || isNotNone(css.rotate) || isNotNone(css.perspective) || !isWebKit() && (isNotNone(css.backdropFilter) || isNotNone(css.filter)) || willChangeRe.test(css.willChange || '') || containRe.test(css.contain || '');
 }
 function getContainingBlock(element) {
   let currentNode = getParentNode(element);
@@ -11326,11 +11201,13 @@ function getContainingBlock(element) {
   return null;
 }
 function isWebKit() {
-  if (typeof CSS === 'undefined' || !CSS.supports) return false;
-  return CSS.supports('-webkit-backdrop-filter', 'none');
+  if (isWebKitValue == null) {
+    isWebKitValue = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('-webkit-backdrop-filter', 'none');
+  }
+  return isWebKitValue;
 }
 function isLastTraversableNode(node) {
-  return ['html', 'body', '#document'].includes(getNodeName(node));
+  return /^(html|body|#document)$/.test(getNodeName(node));
 }
 function getComputedStyle$1(element) {
   return getWindow(element).getComputedStyle(element);
@@ -11386,8 +11263,9 @@ function getOverflowAncestors(node, list, traverseIframes) {
   if (isBody) {
     const frameElement = getFrameElement(win);
     return list.concat(win, win.visualViewport || [], isOverflowElement(scrollableAncestor) ? scrollableAncestor : [], frameElement && traverseIframes ? getOverflowAncestors(frameElement) : []);
+  } else {
+    return list.concat(scrollableAncestor, getOverflowAncestors(scrollableAncestor, [], traverseIframes));
   }
-  return list.concat(scrollableAncestor, getOverflowAncestors(scrollableAncestor, [], traverseIframes));
 }
 function getFrameElement(win) {
   return win.parent && Object.getPrototypeOf(win.parent) ? win.frameElement : null;
@@ -11525,14 +11403,9 @@ function getWindowScrollBarX(element, rect) {
   }
   return rect.left + leftScroll;
 }
-function getHTMLOffset(documentElement, scroll, ignoreScrollbarX) {
-  if (ignoreScrollbarX === void 0) {
-    ignoreScrollbarX = false;
-  }
+function getHTMLOffset(documentElement, scroll) {
   const htmlRect = documentElement.getBoundingClientRect();
-  const x = htmlRect.left + scroll.scrollLeft - (ignoreScrollbarX ? 0 :
-  // RTL <body> scrollbar.
-  getWindowScrollBarX(documentElement, htmlRect));
+  const x = htmlRect.left + scroll.scrollLeft - getWindowScrollBarX(documentElement, htmlRect);
   const y = htmlRect.top + scroll.scrollTop;
   return {
     x,
@@ -11563,14 +11436,14 @@ function convertOffsetParentRelativeRectToViewportRelativeRect(_ref) {
     if (getNodeName(offsetParent) !== 'body' || isOverflowElement(documentElement)) {
       scroll = getNodeScroll(offsetParent);
     }
-    if (isHTMLElement(offsetParent)) {
+    if (isOffsetParentAnElement) {
       const offsetRect = getBoundingClientRect(offsetParent);
       scale = getScale(offsetParent);
       offsets.x = offsetRect.x + offsetParent.clientLeft;
       offsets.y = offsetRect.y + offsetParent.clientTop;
     }
   }
-  const htmlOffset = documentElement && !isOffsetParentAnElement && !isFixed ? getHTMLOffset(documentElement, scroll, true) : createCoords(0);
+  const htmlOffset = documentElement && !isOffsetParentAnElement && !isFixed ? getHTMLOffset(documentElement, scroll) : createCoords(0);
   return {
     width: rect.width * scale.x,
     height: rect.height * scale.y,
@@ -11602,6 +11475,11 @@ function getDocumentRect(element) {
     y
   };
 }
+
+// Safety check: ensure the scrollbar space is reasonable in case this
+// calculation is affected by unusual styles.
+// Most scrollbars leave 15-18px of space.
+const SCROLLBAR_MAX = 25;
 function getViewportRect(element, strategy) {
   const win = getWindow(element);
   const html = getDocumentElement(element);
@@ -11618,6 +11496,24 @@ function getViewportRect(element, strategy) {
       x = visualViewport.offsetLeft;
       y = visualViewport.offsetTop;
     }
+  }
+  const windowScrollbarX = getWindowScrollBarX(html);
+  // <html> `overflow: hidden` + `scrollbar-gutter: stable` reduces the
+  // visual width of the <html> but this is not considered in the size
+  // of `html.clientWidth`.
+  if (windowScrollbarX <= 0) {
+    const doc = html.ownerDocument;
+    const body = doc.body;
+    const bodyStyles = getComputedStyle(body);
+    const bodyMarginInline = doc.compatMode === 'CSS1Compat' ? parseFloat(bodyStyles.marginLeft) + parseFloat(bodyStyles.marginRight) || 0 : 0;
+    const clippingStableScrollbarWidth = Math.abs(html.clientWidth - body.clientWidth - bodyMarginInline);
+    if (clippingStableScrollbarWidth <= SCROLLBAR_MAX) {
+      width -= clippingStableScrollbarWidth;
+    }
+  } else if (windowScrollbarX <= SCROLLBAR_MAX) {
+    // If the <body> scrollbar is on the left, the width needs to be extended
+    // by the scrollbar amount so there isn't extra space on the right.
+    width += windowScrollbarX;
   }
   return {
     width,
@@ -11691,7 +11587,7 @@ function getClippingElementAncestors(element, cache) {
     if (!currentNodeIsContaining && computedStyle.position === 'fixed') {
       currentContainingBlockComputedStyle = null;
     }
-    const shouldDropCurrentNode = elementIsFixed ? !currentNodeIsContaining && !currentContainingBlockComputedStyle : !currentNodeIsContaining && computedStyle.position === 'static' && !!currentContainingBlockComputedStyle && ['absolute', 'fixed'].includes(currentContainingBlockComputedStyle.position) || isOverflowElement(currentNode) && !currentNodeIsContaining && hasFixedPositionAncestor(element, currentNode);
+    const shouldDropCurrentNode = elementIsFixed ? !currentNodeIsContaining && !currentContainingBlockComputedStyle : !currentNodeIsContaining && computedStyle.position === 'static' && !!currentContainingBlockComputedStyle && (currentContainingBlockComputedStyle.position === 'absolute' || currentContainingBlockComputedStyle.position === 'fixed') || isOverflowElement(currentNode) && !currentNodeIsContaining && hasFixedPositionAncestor(element, currentNode);
     if (shouldDropCurrentNode) {
       // Drop non-containing blocks.
       result = result.filter(ancestor => ancestor !== currentNode);
@@ -11716,20 +11612,23 @@ function getClippingRect(_ref) {
   } = _ref;
   const elementClippingAncestors = boundary === 'clippingAncestors' ? isTopLayer(element) ? [] : getClippingElementAncestors(element, this._c) : [].concat(boundary);
   const clippingAncestors = [...elementClippingAncestors, rootBoundary];
-  const firstClippingAncestor = clippingAncestors[0];
-  const clippingRect = clippingAncestors.reduce((accRect, clippingAncestor) => {
-    const rect = getClientRectFromClippingAncestor(element, clippingAncestor, strategy);
-    accRect.top = max(rect.top, accRect.top);
-    accRect.right = min(rect.right, accRect.right);
-    accRect.bottom = min(rect.bottom, accRect.bottom);
-    accRect.left = max(rect.left, accRect.left);
-    return accRect;
-  }, getClientRectFromClippingAncestor(element, firstClippingAncestor, strategy));
+  const firstRect = getClientRectFromClippingAncestor(element, clippingAncestors[0], strategy);
+  let top = firstRect.top;
+  let right = firstRect.right;
+  let bottom = firstRect.bottom;
+  let left = firstRect.left;
+  for (let i = 1; i < clippingAncestors.length; i++) {
+    const rect = getClientRectFromClippingAncestor(element, clippingAncestors[i], strategy);
+    top = max(rect.top, top);
+    right = min(rect.right, right);
+    bottom = min(rect.bottom, bottom);
+    left = max(rect.left, left);
+  }
   return {
-    width: clippingRect.right - clippingRect.left,
-    height: clippingRect.bottom - clippingRect.top,
-    x: clippingRect.left,
-    y: clippingRect.top
+    width: right - left,
+    height: bottom - top,
+    x: left,
+    y: top
   };
 }
 function getDimensions(element) {
@@ -11752,6 +11651,12 @@ function getRectRelativeToOffsetParent(element, offsetParent, strategy) {
     scrollTop: 0
   };
   const offsets = createCoords(0);
+
+  // If the <body> scrollbar appears on the left (e.g. RTL systems). Use
+  // Firefox with layout.scrollbar.side = 3 in about:config to test this.
+  function setLeftRTLScrollbarOffset() {
+    offsets.x = getWindowScrollBarX(documentElement);
+  }
   if (isOffsetParentAnElement || !isOffsetParentAnElement && !isFixed) {
     if (getNodeName(offsetParent) !== 'body' || isOverflowElement(documentElement)) {
       scroll = getNodeScroll(offsetParent);
@@ -11761,10 +11666,11 @@ function getRectRelativeToOffsetParent(element, offsetParent, strategy) {
       offsets.x = offsetRect.x + offsetParent.clientLeft;
       offsets.y = offsetRect.y + offsetParent.clientTop;
     } else if (documentElement) {
-      // If the <body> scrollbar appears on the left (e.g. RTL systems). Use
-      // Firefox with layout.scrollbar.side = 3 in about:config to test this.
-      offsets.x = getWindowScrollBarX(documentElement);
+      setLeftRTLScrollbarOffset();
     }
+  }
+  if (isFixed && !isOffsetParentAnElement && documentElement) {
+    setLeftRTLScrollbarOffset();
   }
   const htmlOffset = documentElement && !isOffsetParentAnElement && !isFixed ? getHTMLOffset(documentElement, scroll) : createCoords(0);
   const x = rect.left + scroll.scrollLeft - offsets.x - htmlOffset.x;
@@ -11853,6 +11759,9 @@ const platform = {
   isElement,
   isRTL
 };
+function rectsAreEqual(a, b) {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
 
 // https://samthor.au/2021/observing-dom/
 function observeMove(element, onMove) {
@@ -11873,12 +11782,13 @@ function observeMove(element, onMove) {
       threshold = 1;
     }
     cleanup();
+    const elementRectForRootMargin = element.getBoundingClientRect();
     const {
       left,
       top,
       width,
       height
-    } = element.getBoundingClientRect();
+    } = elementRectForRootMargin;
     if (!skip) {
       onMove();
     }
@@ -11911,6 +11821,16 @@ function observeMove(element, onMove) {
           refresh(false, ratio);
         }
       }
+      if (ratio === 1 && !rectsAreEqual(elementRectForRootMargin, element.getBoundingClientRect())) {
+        // It's possible that even though the ratio is reported as 1, the
+        // element is not actually fully within the IntersectionObserver's root
+        // area anymore. This can happen under performance constraints. This may
+        // be a bug in the browser's IntersectionObserver implementation. To
+        // work around this, we compare the element's bounding rect now with
+        // what it was at the time we created the IntersectionObserver. If they
+        // are not equal then the element moved, so we refresh.
+        refresh();
+      }
       isFirstUpdate = false;
     }
 
@@ -11922,7 +11842,7 @@ function observeMove(element, onMove) {
         // Handle <iframe>s
         root: root.ownerDocument
       });
-    } catch (e) {
+    } catch (_e) {
       io = new IntersectionObserver(handleObserve, options);
     }
     io.observe(element);
@@ -11951,7 +11871,7 @@ function autoUpdate(reference, floating, update, options) {
     animationFrame = false
   } = options;
   const referenceEl = unwrapElement(reference);
-  const ancestors = ancestorScroll || ancestorResize ? [...(referenceEl ? getOverflowAncestors(referenceEl) : []), ...getOverflowAncestors(floating)] : [];
+  const ancestors = ancestorScroll || ancestorResize ? [...(referenceEl ? getOverflowAncestors(referenceEl) : []), ...(floating ? getOverflowAncestors(floating) : [])] : [];
   ancestors.forEach(ancestor => {
     ancestorScroll && ancestor.addEventListener('scroll', update, {
       passive: true
@@ -11964,7 +11884,7 @@ function autoUpdate(reference, floating, update, options) {
   if (elementResize) {
     resizeObserver = new ResizeObserver(_ref => {
       let [firstEntry] = _ref;
-      if (firstEntry && firstEntry.target === referenceEl && resizeObserver) {
+      if (firstEntry && firstEntry.target === referenceEl && resizeObserver && floating) {
         // Prevent update loops when using the `size` middleware.
         // https://github.com/floating-ui/floating-ui/issues/1740
         resizeObserver.unobserve(floating);
@@ -11979,7 +11899,9 @@ function autoUpdate(reference, floating, update, options) {
     if (referenceEl && !animationFrame) {
       resizeObserver.observe(referenceEl);
     }
-    resizeObserver.observe(floating);
+    if (floating) {
+      resizeObserver.observe(floating);
+    }
   }
   let frameId;
   let prevRefRect = animationFrame ? getBoundingClientRect(reference) : null;
@@ -11988,7 +11910,7 @@ function autoUpdate(reference, floating, update, options) {
   }
   function frameLoop() {
     const nextRefRect = getBoundingClientRect(reference);
-    if (prevRefRect && (nextRefRect.x !== prevRefRect.x || nextRefRect.y !== prevRefRect.y || nextRefRect.width !== prevRefRect.width || nextRefRect.height !== prevRefRect.height)) {
+    if (prevRefRect && !rectsAreEqual(prevRefRect, nextRefRect)) {
       update();
     }
     prevRefRect = nextRefRect;
@@ -12380,7 +12302,7 @@ var SlPopup = class extends ShoelaceElement {
     this.emit("sl-reposition");
   }
   render() {
-    return x`
+    return b`
       <slot name="anchor" @slotchange=${this.handleAnchorChange}></slot>
 
       <span
@@ -12401,14 +12323,14 @@ var SlPopup = class extends ShoelaceElement {
     })}
       >
         <slot></slot>
-        ${this.arrow ? x`<div part="arrow" class="popup__arrow" role="presentation"></div>` : ""}
+        ${this.arrow ? b`<div part="arrow" class="popup__arrow" role="presentation"></div>` : ""}
       </div>
     `;
   }
 };
 SlPopup.styles = [component_styles_default, popup_styles_default];
-__decorateClass([e$7(".popup")], SlPopup.prototype, "popup", 2);
-__decorateClass([e$7(".popup__arrow")], SlPopup.prototype, "arrowEl", 2);
+__decorateClass([e$6(".popup")], SlPopup.prototype, "popup", 2);
+__decorateClass([e$6(".popup__arrow")], SlPopup.prototype, "arrowEl", 2);
 __decorateClass([n$6()], SlPopup.prototype, "anchor", 2);
 __decorateClass([n$6({
   type: Boolean,
@@ -12737,7 +12659,7 @@ var SlTooltip = class extends ShoelaceElement {
   // element, otherwise positioning is incorrect.
   //
   render() {
-    return x`
+    return b`
       <sl-popup
         part="base"
         exportparts="
@@ -12772,9 +12694,9 @@ SlTooltip.styles = [component_styles_default, tooltip_styles_default];
 SlTooltip.dependencies = {
   "sl-popup": SlPopup
 };
-__decorateClass([e$7("slot:not([name])")], SlTooltip.prototype, "defaultSlot", 2);
-__decorateClass([e$7(".tooltip__body")], SlTooltip.prototype, "body", 2);
-__decorateClass([e$7("sl-popup")], SlTooltip.prototype, "popup", 2);
+__decorateClass([e$6("slot:not([name])")], SlTooltip.prototype, "defaultSlot", 2);
+__decorateClass([e$6(".tooltip__body")], SlTooltip.prototype, "body", 2);
+__decorateClass([e$6("sl-popup")], SlTooltip.prototype, "popup", 2);
 __decorateClass([n$6()], SlTooltip.prototype, "content", 2);
 __decorateClass([n$6()], SlTooltip.prototype, "placement", 2);
 __decorateClass([n$6({
@@ -13213,7 +13135,7 @@ var SlCheckbox = class extends ShoelaceElement {
   render() {
     const hasHelpTextSlot = this.hasSlotController.test("help-text");
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
-    return x`
+    return b`
       <div
         class=${e$3({
       "form-control": true,
@@ -13259,10 +13181,10 @@ var SlCheckbox = class extends ShoelaceElement {
             part="control${this.checked ? " control--checked" : ""}${this.indeterminate ? " control--indeterminate" : ""}"
             class="checkbox__control"
           >
-            ${this.checked ? x`
+            ${this.checked ? b`
                   <sl-icon part="checked-icon" class="checkbox__checked-icon" library="system" name="check"></sl-icon>
                 ` : ""}
-            ${!this.checked && this.indeterminate ? x`
+            ${!this.checked && this.indeterminate ? b`
                   <sl-icon
                     part="indeterminate-icon"
                     class="checkbox__indeterminate-icon"
@@ -13293,8 +13215,8 @@ SlCheckbox.styles = [component_styles_default, form_control_styles_default, chec
 SlCheckbox.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7('input[type="checkbox"]')], SlCheckbox.prototype, "input", 2);
-__decorateClass([r$3()], SlCheckbox.prototype, "hasFocus", 2);
+__decorateClass([e$6('input[type="checkbox"]')], SlCheckbox.prototype, "input", 2);
+__decorateClass([r$4()], SlCheckbox.prototype, "hasFocus", 2);
 __decorateClass([n$6()], SlCheckbox.prototype, "title", 2);
 __decorateClass([n$6()], SlCheckbox.prototype, "name", 2);
 __decorateClass([n$6()], SlCheckbox.prototype, "value", 2);
@@ -13397,7 +13319,7 @@ var SlSpinner = class extends ShoelaceElement {
     this.localize = new LocalizeController(this);
   }
   render() {
-    return x`
+    return b`
       <svg part="base" class="spinner" role="progressbar" aria-label=${this.localize.term("loading")}>
         <circle class="spinner__track"></circle>
         <circle class="spinner__indicator"></circle>
@@ -13532,7 +13454,7 @@ var _SlTreeItem = class _SlTreeItem extends ShoelaceElement {
   render() {
     const isRtl = this.localize.dir() === "rtl";
     const showExpandButton = !this.loading && (!this.isLeaf || this.lazy);
-    return x`
+    return b`
       <div
         part="base"
         class="${e$3({
@@ -13565,7 +13487,7 @@ var _SlTreeItem = class _SlTreeItem extends ShoelaceElement {
     })}
             aria-hidden="true"
           >
-            ${n$3(this.loading, () => x` <sl-spinner part="spinner" exportparts="base:spinner__base"></sl-spinner> `)}
+            ${n$3(this.loading, () => b` <sl-spinner part="spinner" exportparts="base:spinner__base"></sl-spinner> `)}
             <slot class="tree-item__expand-icon-slot" name="expand-icon">
               <sl-icon library="system" name=${isRtl ? "chevron-left" : "chevron-right"}></sl-icon>
             </slot>
@@ -13574,7 +13496,7 @@ var _SlTreeItem = class _SlTreeItem extends ShoelaceElement {
             </slot>
           </div>
 
-          ${n$3(this.selectable, () => x`
+          ${n$3(this.selectable, () => b`
               <sl-checkbox
                 part="checkbox"
                 exportparts="
@@ -13610,10 +13532,10 @@ _SlTreeItem.dependencies = {
   "sl-icon": SlIcon,
   "sl-spinner": SlSpinner
 };
-__decorateClass([r$3()], _SlTreeItem.prototype, "indeterminate", 2);
-__decorateClass([r$3()], _SlTreeItem.prototype, "isLeaf", 2);
-__decorateClass([r$3()], _SlTreeItem.prototype, "loading", 2);
-__decorateClass([r$3()], _SlTreeItem.prototype, "selectable", 2);
+__decorateClass([r$4()], _SlTreeItem.prototype, "indeterminate", 2);
+__decorateClass([r$4()], _SlTreeItem.prototype, "isLeaf", 2);
+__decorateClass([r$4()], _SlTreeItem.prototype, "loading", 2);
+__decorateClass([r$4()], _SlTreeItem.prototype, "selectable", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -13630,11 +13552,11 @@ __decorateClass([n$6({
   type: Boolean,
   reflect: true
 })], _SlTreeItem.prototype, "lazy", 2);
-__decorateClass([e$7("slot:not([name])")], _SlTreeItem.prototype, "defaultSlot", 2);
-__decorateClass([e$7("slot[name=children]")], _SlTreeItem.prototype, "childrenSlot", 2);
-__decorateClass([e$7(".tree-item__item")], _SlTreeItem.prototype, "itemElement", 2);
-__decorateClass([e$7(".tree-item__children")], _SlTreeItem.prototype, "childrenContainer", 2);
-__decorateClass([e$7(".tree-item__expand-button slot")], _SlTreeItem.prototype, "expandButtonSlot", 2);
+__decorateClass([e$6("slot:not([name])")], _SlTreeItem.prototype, "defaultSlot", 2);
+__decorateClass([e$6("slot[name=children]")], _SlTreeItem.prototype, "childrenSlot", 2);
+__decorateClass([e$6(".tree-item__item")], _SlTreeItem.prototype, "itemElement", 2);
+__decorateClass([e$6(".tree-item__children")], _SlTreeItem.prototype, "childrenContainer", 2);
+__decorateClass([e$6(".tree-item__expand-button slot")], _SlTreeItem.prototype, "expandButtonSlot", 2);
 __decorateClass([watch("loading", {
   waitUntilFirstUpdate: true
 })], _SlTreeItem.prototype, "handleLoadingChange", 1);
@@ -13989,7 +13911,7 @@ var SlTree = class extends ShoelaceElement {
     });
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class="tree"
@@ -14005,9 +13927,9 @@ var SlTree = class extends ShoelaceElement {
   }
 };
 SlTree.styles = [component_styles_default, tree_styles_default];
-__decorateClass([e$7("slot:not([name])")], SlTree.prototype, "defaultSlot", 2);
-__decorateClass([e$7("slot[name=expand-icon]")], SlTree.prototype, "expandedIconSlot", 2);
-__decorateClass([e$7("slot[name=collapse-icon]")], SlTree.prototype, "collapsedIconSlot", 2);
+__decorateClass([e$6("slot:not([name])")], SlTree.prototype, "defaultSlot", 2);
+__decorateClass([e$6("slot[name=expand-icon]")], SlTree.prototype, "expandedIconSlot", 2);
+__decorateClass([e$6("slot[name=collapse-icon]")], SlTree.prototype, "collapsedIconSlot", 2);
 __decorateClass([n$6()], SlTree.prototype, "selection", 2);
 __decorateClass([watch("selection")], SlTree.prototype, "handleSelectionChange", 1);
 
@@ -14145,7 +14067,7 @@ const n$2 = "important",
           t.includes("-") || r ? s.setProperty(t, r ? e.slice(0, -11) : e, r ? n$2 : "") : s[t] = e;
         }
       }
-      return T;
+      return E;
     }
   });
 
@@ -14156,11 +14078,11 @@ const n$2 = "important",
  */
 let e$1 = class e extends i$3 {
   constructor(i) {
-    if (super(i), this.it = E, i.type !== t.CHILD) throw Error(this.constructor.directiveName + "() can only be used in child bindings");
+    if (super(i), this.it = A, i.type !== t.CHILD) throw Error(this.constructor.directiveName + "() can only be used in child bindings");
   }
   render(r) {
-    if (r === E || null == r) return this._t = void 0, this.it = r;
-    if (r === T) return r;
+    if (r === A || null == r) return this._t = void 0, this.it = r;
+    if (r === E) return r;
     if ("string" != typeof r) throw Error(this.constructor.directiveName + "() called with a non-string value");
     if (r === this.it) return this._t;
     this.it = r;
@@ -14309,7 +14231,7 @@ var SlRating = class extends ShoelaceElement {
     } else {
       displayValue = this.isHovering ? this.hoverValue : this.value;
     }
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -14338,7 +14260,7 @@ var SlRating = class extends ShoelaceElement {
         <span class="rating__symbols">
           ${counter.map(index => {
       if (displayValue > index && displayValue < index + 1) {
-        return x`
+        return b`
                 <span
                   class=${e$3({
           rating__symbol: true,
@@ -14365,7 +14287,7 @@ var SlRating = class extends ShoelaceElement {
                 </span>
               `;
       }
-      return x`
+      return b`
               <span
                 class=${e$3({
         rating__symbol: true,
@@ -14387,9 +14309,9 @@ SlRating.styles = [component_styles_default, rating_styles_default];
 SlRating.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".rating")], SlRating.prototype, "rating", 2);
-__decorateClass([r$3()], SlRating.prototype, "hoverValue", 2);
-__decorateClass([r$3()], SlRating.prototype, "isHovering", 2);
+__decorateClass([e$6(".rating")], SlRating.prototype, "rating", 2);
+__decorateClass([r$4()], SlRating.prototype, "hoverValue", 2);
+__decorateClass([r$4()], SlRating.prototype, "isHovering", 2);
 __decorateClass([n$6()], SlRating.prototype, "label", 2);
 __decorateClass([n$6({
   type: Number
@@ -14510,11 +14432,11 @@ var SlRelativeTime = class extends ShoelaceElement {
       }
       this.updateTimeout = window.setTimeout(() => this.requestUpdate(), nextInterval);
     }
-    return x` <time datetime=${this.isoTime}>${this.relativeTime}</time> `;
+    return b` <time datetime=${this.isoTime}>${this.relativeTime}</time> `;
   }
 };
-__decorateClass([r$3()], SlRelativeTime.prototype, "isoTime", 2);
-__decorateClass([r$3()], SlRelativeTime.prototype, "relativeTime", 2);
+__decorateClass([r$4()], SlRelativeTime.prototype, "isoTime", 2);
+__decorateClass([r$4()], SlRelativeTime.prototype, "relativeTime", 2);
 __decorateClass([n$6()], SlRelativeTime.prototype, "date", 2);
 __decorateClass([n$6()], SlRelativeTime.prototype, "format", 2);
 __decorateClass([n$6()], SlRelativeTime.prototype, "numeric", 2);
@@ -14931,7 +14853,7 @@ var SlSelect = class extends ShoelaceElement {
     this.form = "";
     this.required = false;
     this.getTag = option => {
-      return x`
+      return b`
       <sl-tag
         part="tag"
         exportparts="
@@ -15289,13 +15211,13 @@ var SlSelect = class extends ShoelaceElement {
     return this.selectedOptions.map((option, index) => {
       if (index < this.maxOptionsVisible || this.maxOptionsVisible <= 0) {
         const tag = this.getTag(option, index);
-        return x`<div @sl-remove=${e => this.handleTagRemove(e, option)}>
+        return b`<div @sl-remove=${e => this.handleTagRemove(e, option)}>
           ${typeof tag === "string" ? o$4(tag) : tag}
         </div>`;
       } else if (index === this.maxOptionsVisible) {
-        return x`<sl-tag size=${this.size}>+${this.selectedOptions.length - index}</sl-tag>`;
+        return b`<sl-tag size=${this.size}>+${this.selectedOptions.length - index}</sl-tag>`;
       }
-      return x``;
+      return b``;
     });
   }
   handleInvalid(event) {
@@ -15414,7 +15336,7 @@ var SlSelect = class extends ShoelaceElement {
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
     const hasClearIcon = this.clearable && !this.disabled && this.value.length > 0;
     const isPlaceholderVisible = this.placeholder && this.value && this.value.length <= 0;
-    return x`
+    return b`
       <div
         part="form-control"
         class=${e$3({
@@ -15494,7 +15416,7 @@ var SlSelect = class extends ShoelaceElement {
                 @blur=${this.handleBlur}
               />
 
-              ${this.multiple ? x`<div part="tags" class="select__tags">${this.tags}</div>` : ""}
+              ${this.multiple ? b`<div part="tags" class="select__tags">${this.tags}</div>` : ""}
 
               <input
                 class="select__value-input"
@@ -15508,7 +15430,7 @@ var SlSelect = class extends ShoelaceElement {
                 @invalid=${this.handleInvalid}
               />
 
-              ${hasClearIcon ? x`
+              ${hasClearIcon ? b`
                     <button
                       part="clear-button"
                       class="select__clear"
@@ -15566,18 +15488,18 @@ SlSelect.dependencies = {
   "sl-popup": SlPopup,
   "sl-tag": SlTag
 };
-__decorateClass([e$7(".select")], SlSelect.prototype, "popup", 2);
-__decorateClass([e$7(".select__combobox")], SlSelect.prototype, "combobox", 2);
-__decorateClass([e$7(".select__display-input")], SlSelect.prototype, "displayInput", 2);
-__decorateClass([e$7(".select__value-input")], SlSelect.prototype, "valueInput", 2);
-__decorateClass([e$7(".select__listbox")], SlSelect.prototype, "listbox", 2);
-__decorateClass([r$3()], SlSelect.prototype, "hasFocus", 2);
-__decorateClass([r$3()], SlSelect.prototype, "displayLabel", 2);
-__decorateClass([r$3()], SlSelect.prototype, "currentOption", 2);
-__decorateClass([r$3()], SlSelect.prototype, "selectedOptions", 2);
-__decorateClass([r$3()], SlSelect.prototype, "valueHasChanged", 2);
+__decorateClass([e$6(".select")], SlSelect.prototype, "popup", 2);
+__decorateClass([e$6(".select__combobox")], SlSelect.prototype, "combobox", 2);
+__decorateClass([e$6(".select__display-input")], SlSelect.prototype, "displayInput", 2);
+__decorateClass([e$6(".select__value-input")], SlSelect.prototype, "valueInput", 2);
+__decorateClass([e$6(".select__listbox")], SlSelect.prototype, "listbox", 2);
+__decorateClass([r$4()], SlSelect.prototype, "hasFocus", 2);
+__decorateClass([r$4()], SlSelect.prototype, "displayLabel", 2);
+__decorateClass([r$4()], SlSelect.prototype, "currentOption", 2);
+__decorateClass([r$4()], SlSelect.prototype, "selectedOptions", 2);
+__decorateClass([r$4()], SlSelect.prototype, "valueHasChanged", 2);
 __decorateClass([n$6()], SlSelect.prototype, "name", 2);
-__decorateClass([r$3()], SlSelect.prototype, "value", 1);
+__decorateClass([r$4()], SlSelect.prototype, "value", 1);
 __decorateClass([n$6({
   attribute: "value"
 })], SlSelect.prototype, "defaultValue", 2);
@@ -15766,7 +15688,7 @@ var SlSkeleton = class extends ShoelaceElement {
     this.effect = "none";
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -16064,7 +15986,7 @@ var SlSwitch = class extends ShoelaceElement {
   render() {
     const hasHelpTextSlot = this.hasSlotController.test("help-text");
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
-    return x`
+    return b`
       <div
         class=${e$3({
       "form-control": true,
@@ -16128,8 +16050,8 @@ var SlSwitch = class extends ShoelaceElement {
   }
 };
 SlSwitch.styles = [component_styles_default, form_control_styles_default, switch_styles_default];
-__decorateClass([e$7('input[type="checkbox"]')], SlSwitch.prototype, "input", 2);
-__decorateClass([r$3()], SlSwitch.prototype, "hasFocus", 2);
+__decorateClass([e$6('input[type="checkbox"]')], SlSwitch.prototype, "input", 2);
+__decorateClass([r$4()], SlSwitch.prototype, "hasFocus", 2);
 __decorateClass([n$6()], SlSwitch.prototype, "title", 2);
 __decorateClass([n$6()], SlSwitch.prototype, "name", 2);
 __decorateClass([n$6()], SlSwitch.prototype, "value", 2);
@@ -16500,7 +16422,7 @@ var SlSplitPanel = class extends ShoelaceElement {
       }
     }
     this.style[gridTemplateAlt] = "";
-    return x`
+    return b`
       <slot name="start" part="panel start" class="start"></slot>
 
       <div
@@ -16524,7 +16446,7 @@ var SlSplitPanel = class extends ShoelaceElement {
   }
 };
 SlSplitPanel.styles = [component_styles_default, split_panel_styles_default];
-__decorateClass([e$7(".divider")], SlSplitPanel.prototype, "divider", 2);
+__decorateClass([e$6(".divider")], SlSplitPanel.prototype, "divider", 2);
 __decorateClass([n$6({
   type: Number,
   reflect: true
@@ -16629,7 +16551,7 @@ var SlMutationObserver = class extends ShoelaceElement {
     this.startObserver();
   }
   render() {
-    return x` <slot></slot> `;
+    return b` <slot></slot> `;
   }
 };
 SlMutationObserver.styles = [component_styles_default, mutation_observer_styles_default];
@@ -16779,7 +16701,7 @@ var SlProgressBar = class extends ShoelaceElement {
     this.label = "";
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -16797,7 +16719,7 @@ var SlProgressBar = class extends ShoelaceElement {
         <div part="indicator" class="progress-bar__indicator" style=${o$5({
       width: `${this.value}%`
     })}>
-          ${!this.indeterminate ? x` <slot part="label" class="progress-bar__label"></slot> ` : ""}
+          ${!this.indeterminate ? b` <slot part="label" class="progress-bar__label"></slot> ` : ""}
         </div>
       </div>
     `;
@@ -16909,7 +16831,7 @@ var SlProgressRing = class extends ShoelaceElement {
     }
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class="progress-ring"
@@ -16932,8 +16854,8 @@ var SlProgressRing = class extends ShoelaceElement {
   }
 };
 SlProgressRing.styles = [component_styles_default, progress_ring_styles_default];
-__decorateClass([e$7(".progress-ring__indicator")], SlProgressRing.prototype, "indicator", 2);
-__decorateClass([r$3()], SlProgressRing.prototype, "indicatorOffset", 2);
+__decorateClass([e$6(".progress-ring__indicator")], SlProgressRing.prototype, "indicator", 2);
+__decorateClass([r$4()], SlProgressRing.prototype, "indicatorOffset", 2);
 __decorateClass([n$6({
   type: Number,
   reflect: true
@@ -17456,7 +17378,7 @@ var SlQrCode = class extends ShoelaceElement {
   }
   render() {
     var _a;
-    return x`
+    return b`
       <canvas
         part="base"
         class="qr-code"
@@ -17471,7 +17393,7 @@ var SlQrCode = class extends ShoelaceElement {
   }
 };
 SlQrCode.styles = [component_styles_default, qr_code_styles_default];
-__decorateClass([e$7("canvas")], SlQrCode.prototype, "canvas", 2);
+__decorateClass([e$6("canvas")], SlQrCode.prototype, "canvas", 2);
 __decorateClass([n$6()], SlQrCode.prototype, "value", 2);
 __decorateClass([n$6()], SlQrCode.prototype, "label", 2);
 __decorateClass([n$6({
@@ -18198,9 +18120,9 @@ var SlRadioButton = class extends ShoelaceElement {
   }
 };
 SlRadioButton.styles = [component_styles_default, radio_button_styles_default];
-__decorateClass([e$7(".button")], SlRadioButton.prototype, "input", 2);
-__decorateClass([e$7(".hidden-input")], SlRadioButton.prototype, "hiddenInput", 2);
-__decorateClass([r$3()], SlRadioButton.prototype, "hasFocus", 2);
+__decorateClass([e$6(".button")], SlRadioButton.prototype, "input", 2);
+__decorateClass([e$6(".hidden-input")], SlRadioButton.prototype, "hiddenInput", 2);
+__decorateClass([r$4()], SlRadioButton.prototype, "hasFocus", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -18390,7 +18312,7 @@ var SlRadio = class extends ShoelaceElement {
     this.setAttribute("aria-disabled", this.disabled ? "true" : "false");
   }
   render() {
-    return x`
+    return b`
       <span
         part="base"
         class=${e$3({
@@ -18404,7 +18326,7 @@ var SlRadio = class extends ShoelaceElement {
     })}
       >
         <span part="${`control${this.checked ? " control--checked" : ""}`}" class="radio__control">
-          ${this.checked ? x` <sl-icon part="checked-icon" class="radio__checked-icon" library="system" name="radio"></sl-icon> ` : ""}
+          ${this.checked ? b` <sl-icon part="checked-icon" class="radio__checked-icon" library="system" name="radio"></sl-icon> ` : ""}
         </span>
 
         <slot part="label" class="radio__label"></slot>
@@ -18416,8 +18338,8 @@ SlRadio.styles = [component_styles_default, radio_styles_default];
 SlRadio.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([r$3()], SlRadio.prototype, "checked", 2);
-__decorateClass([r$3()], SlRadio.prototype, "hasFocus", 2);
+__decorateClass([r$4()], SlRadio.prototype, "checked", 2);
+__decorateClass([r$4()], SlRadio.prototype, "hasFocus", 2);
 __decorateClass([n$6()], SlRadio.prototype, "value", 2);
 __decorateClass([n$6({
   reflect: true
@@ -18829,7 +18751,7 @@ var SlRange = class extends ShoelaceElement {
     const hasHelpTextSlot = this.hasSlotController.test("help-text");
     const hasLabel = this.label ? true : !!hasLabelSlot;
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
-    return x`
+    return b`
       <div
         part="form-control"
         class=${e$3({
@@ -18885,7 +18807,7 @@ var SlRange = class extends ShoelaceElement {
               @invalid=${this.handleInvalid}
               @blur=${this.handleBlur}
             />
-            ${this.tooltip !== "none" && !this.disabled ? x`
+            ${this.tooltip !== "none" && !this.disabled ? b`
                   <output part="tooltip" class="range__tooltip">
                     ${typeof this.tooltipFormatter === "function" ? this.tooltipFormatter(this.value) : this.value}
                   </output>
@@ -18906,10 +18828,10 @@ var SlRange = class extends ShoelaceElement {
   }
 };
 SlRange.styles = [component_styles_default, form_control_styles_default, range_styles_default];
-__decorateClass([e$7(".range__control")], SlRange.prototype, "input", 2);
-__decorateClass([e$7(".range__tooltip")], SlRange.prototype, "output", 2);
-__decorateClass([r$3()], SlRange.prototype, "hasFocus", 2);
-__decorateClass([r$3()], SlRange.prototype, "hasTooltip", 2);
+__decorateClass([e$6(".range__control")], SlRange.prototype, "input", 2);
+__decorateClass([e$6(".range__tooltip")], SlRange.prototype, "output", 2);
+__decorateClass([r$4()], SlRange.prototype, "hasFocus", 2);
+__decorateClass([r$4()], SlRange.prototype, "hasTooltip", 2);
 __decorateClass([n$6()], SlRange.prototype, "title", 2);
 __decorateClass([n$6()], SlRange.prototype, "name", 2);
 __decorateClass([n$6({
@@ -19055,7 +18977,7 @@ var SlButtonGroup = class extends ShoelaceElement {
     });
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class="button-group"
@@ -19072,8 +18994,8 @@ var SlButtonGroup = class extends ShoelaceElement {
   }
 };
 SlButtonGroup.styles = [component_styles_default, button_group_styles_default];
-__decorateClass([e$7("slot")], SlButtonGroup.prototype, "defaultSlot", 2);
-__decorateClass([r$3()], SlButtonGroup.prototype, "disableRole", 2);
+__decorateClass([e$6("slot")], SlButtonGroup.prototype, "defaultSlot", 2);
+__decorateClass([r$4()], SlButtonGroup.prototype, "disableRole", 2);
 __decorateClass([n$6()], SlButtonGroup.prototype, "label", 2);
 function findButton(el) {
   var _a;
@@ -19294,10 +19216,10 @@ var SlRadioGroup = class extends ShoelaceElement {
     const hasHelpTextSlot = this.hasSlotController.test("help-text");
     const hasLabel = this.label ? true : !!hasLabelSlot;
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
-    const defaultSlot = x`
+    const defaultSlot = b`
       <slot @slotchange=${this.syncRadios} @click=${this.handleRadioClick} @keydown=${this.handleKeyDown}></slot>
     `;
-    return x`
+    return b`
       <fieldset
         part="form-control"
         class=${e$3({
@@ -19339,7 +19261,7 @@ var SlRadioGroup = class extends ShoelaceElement {
             </label>
           </div>
 
-          ${this.hasButtonGroup ? x`
+          ${this.hasButtonGroup ? b`
                 <sl-button-group part="button-group" exportparts="base:button-group__base" role="presentation">
                   ${defaultSlot}
                 </sl-button-group>
@@ -19362,11 +19284,11 @@ SlRadioGroup.styles = [component_styles_default, form_control_styles_default, ra
 SlRadioGroup.dependencies = {
   "sl-button-group": SlButtonGroup
 };
-__decorateClass([e$7("slot:not([name])")], SlRadioGroup.prototype, "defaultSlot", 2);
-__decorateClass([e$7(".radio-group__validation-input")], SlRadioGroup.prototype, "validationInput", 2);
-__decorateClass([r$3()], SlRadioGroup.prototype, "hasButtonGroup", 2);
-__decorateClass([r$3()], SlRadioGroup.prototype, "errorMessage", 2);
-__decorateClass([r$3()], SlRadioGroup.prototype, "defaultValue", 2);
+__decorateClass([e$6("slot:not([name])")], SlRadioGroup.prototype, "defaultSlot", 2);
+__decorateClass([e$6(".radio-group__validation-input")], SlRadioGroup.prototype, "validationInput", 2);
+__decorateClass([r$4()], SlRadioGroup.prototype, "hasButtonGroup", 2);
+__decorateClass([r$4()], SlRadioGroup.prototype, "errorMessage", 2);
+__decorateClass([r$4()], SlRadioGroup.prototype, "defaultValue", 2);
 __decorateClass([n$6()], SlRadioGroup.prototype, "label", 2);
 __decorateClass([n$6({
   attribute: "help-text"
@@ -19526,7 +19448,7 @@ var SlImageComparer = class extends ShoelaceElement {
   }
   render() {
     const isRtl = this.localize.dir() === "rtl";
-    return x`
+    return b`
       <div
         part="base"
         id="image-comparer"
@@ -19584,8 +19506,8 @@ SlImageComparer.styles = [component_styles_default, image_comparer_styles_defaul
 SlImageComparer.scopedElement = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".image-comparer")], SlImageComparer.prototype, "base", 2);
-__decorateClass([e$7(".image-comparer__handle")], SlImageComparer.prototype, "handle", 2);
+__decorateClass([e$6(".image-comparer")], SlImageComparer.prototype, "base", 2);
+__decorateClass([e$6(".image-comparer__handle")], SlImageComparer.prototype, "handle", 2);
 __decorateClass([n$6({
   type: Number,
   reflect: true
@@ -19676,7 +19598,7 @@ var SlInclude = class extends ShoelaceElement {
     }
   }
   render() {
-    return x`<slot></slot>`;
+    return b`<slot></slot>`;
   }
 };
 SlInclude.styles = [component_styles_default, include_styles_default];
@@ -19826,7 +19748,7 @@ var SlMenu = class extends ShoelaceElement {
     });
   }
   render() {
-    return x`
+    return b`
       <slot
         @slotchange=${this.handleSlotChange}
         @click=${this.handleClick}
@@ -19837,7 +19759,7 @@ var SlMenu = class extends ShoelaceElement {
   }
 };
 SlMenu.styles = [component_styles_default, menu_styles_default];
-__decorateClass([e$7("slot")], SlMenu.prototype, "defaultSlot", 2);
+__decorateClass([e$6("slot")], SlMenu.prototype, "defaultSlot", 2);
 
 var tagName$u = "sl-menu";
 SlMenu.define("sl-menu");
@@ -20340,7 +20262,7 @@ var SlInput = class extends ShoelaceElement {
     const hasHelpText = this.helpText ? true : !!hasHelpTextSlot;
     const hasClearIcon = this.clearable && !this.disabled && !this.readonly;
     const isClearIconVisible = hasClearIcon && (typeof this.value === "number" || this.value.length > 0);
-    return x`
+    return b`
       <div
         part="form-control"
         class=${e$3({
@@ -20418,7 +20340,7 @@ var SlInput = class extends ShoelaceElement {
               @blur=${this.handleBlur}
             />
 
-            ${isClearIconVisible ? x`
+            ${isClearIconVisible ? b`
                   <button
                     part="clear-button"
                     class="input__clear"
@@ -20432,7 +20354,7 @@ var SlInput = class extends ShoelaceElement {
                     </slot>
                   </button>
                 ` : ""}
-            ${this.passwordToggle && !this.disabled ? x`
+            ${this.passwordToggle && !this.disabled ? b`
                   <button
                     part="password-toggle-button"
                     class="input__password-toggle"
@@ -20441,11 +20363,11 @@ var SlInput = class extends ShoelaceElement {
                     @click=${this.handlePasswordToggle}
                     tabindex="-1"
                   >
-                    ${this.passwordVisible ? x`
+                    ${this.passwordVisible ? b`
                           <slot name="show-password-icon">
                             <sl-icon name="eye-slash" library="system"></sl-icon>
                           </slot>
-                        ` : x`
+                        ` : b`
                           <slot name="hide-password-icon">
                             <sl-icon name="eye" library="system"></sl-icon>
                           </slot>
@@ -20475,8 +20397,8 @@ SlInput.styles = [component_styles_default, form_control_styles_default, input_s
 SlInput.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".input__control")], SlInput.prototype, "input", 2);
-__decorateClass([r$3()], SlInput.prototype, "hasFocus", 2);
+__decorateClass([e$6(".input__control")], SlInput.prototype, "input", 2);
+__decorateClass([r$4()], SlInput.prototype, "hasFocus", 2);
 __decorateClass([n$6()], SlInput.prototype, "title", 2);
 __decorateClass([n$6({
   reflect: true
@@ -20787,7 +20709,7 @@ class f extends i$3 {
     i !== this.isConnected && (this.isConnected = i, i ? this.reconnected?.() : this.disconnected?.()), t && (s(this, i), o$3(this));
   }
   setValue(t) {
-    if (f$1(this._$Ct)) this._$Ct._$AI(t, this);else {
+    if (r$2(this._$Ct)) this._$Ct._$AI(t, this);else {
       const i = [...this._$Ct._$AH];
       i[this._$Ci] = t, this._$Ct._$AI(i, this, 0);
     }
@@ -20806,21 +20728,21 @@ class h {}
 const o$2 = new WeakMap(),
   n = e$4(class extends f {
     render(i) {
-      return E;
+      return A;
     }
     update(i, [s]) {
-      const e = s !== this.Y;
-      return e && void 0 !== this.Y && this.rt(void 0), (e || this.lt !== this.ct) && (this.Y = s, this.ht = i.options?.host, this.rt(this.ct = i.element)), E;
+      const e = s !== this.G;
+      return e && void 0 !== this.G && this.rt(void 0), (e || this.lt !== this.ct) && (this.G = s, this.ht = i.options?.host, this.rt(this.ct = i.element)), A;
     }
     rt(t) {
-      if (this.isConnected || (t = void 0), "function" == typeof this.Y) {
+      if (this.isConnected || (t = void 0), "function" == typeof this.G) {
         const i = this.ht ?? globalThis;
         let s = o$2.get(i);
-        void 0 === s && (s = new WeakMap(), o$2.set(i, s)), void 0 !== s.get(this.Y) && this.Y.call(this.ht, void 0), s.set(this.Y, t), void 0 !== t && this.Y.call(this.ht, t);
-      } else this.Y.value = t;
+        void 0 === s && (s = new WeakMap(), o$2.set(i, s)), void 0 !== s.get(this.G) && this.G.call(this.ht, void 0), s.set(this.G, t), void 0 !== t && this.G.call(this.ht, t);
+      } else this.G.value = t;
     }
     get lt() {
-      return "function" == typeof this.Y ? o$2.get(this.ht ?? globalThis)?.get(this.Y) : this.Y?.value;
+      return "function" == typeof this.G ? o$2.get(this.ht ?? globalThis)?.get(this.G) : this.G?.value;
     }
     disconnected() {
       this.lt === this.ct && this.rt(void 0);
@@ -21050,9 +20972,9 @@ var SubmenuController = class {
   renderSubmenu() {
     const isRtl = getComputedStyle(this.host).direction === "rtl";
     if (!this.isConnected) {
-      return x` <slot name="submenu" hidden></slot> `;
+      return b` <slot name="submenu" hidden></slot> `;
     }
-    return x`
+    return b`
       <sl-popup
         ${n(this.popupRef)}
         placement=${isRtl ? "left-start" : "right-start"}
@@ -21151,7 +21073,7 @@ var SlMenuItem = class extends ShoelaceElement {
   render() {
     const isRtl = this.localize.dir() === "rtl";
     const isSubmenuExpanded = this.submenuController.isExpanded();
-    return x`
+    return b`
       <div
         id="anchor"
         part="base"
@@ -21182,7 +21104,7 @@ var SlMenuItem = class extends ShoelaceElement {
         </span>
 
         ${this.submenuController.renderSubmenu()}
-        ${this.loading ? x` <sl-spinner part="spinner" exportparts="base:spinner__base"></sl-spinner> ` : ""}
+        ${this.loading ? b` <sl-spinner part="spinner" exportparts="base:spinner__base"></sl-spinner> ` : ""}
       </div>
     `;
   }
@@ -21193,8 +21115,8 @@ SlMenuItem.dependencies = {
   "sl-popup": SlPopup,
   "sl-spinner": SlSpinner
 };
-__decorateClass([e$7("slot:not([name])")], SlMenuItem.prototype, "defaultSlot", 2);
-__decorateClass([e$7(".menu-item")], SlMenuItem.prototype, "menuItem", 2);
+__decorateClass([e$6("slot:not([name])")], SlMenuItem.prototype, "defaultSlot", 2);
+__decorateClass([e$6(".menu-item")], SlMenuItem.prototype, "menuItem", 2);
 __decorateClass([n$6()], SlMenuItem.prototype, "type", 2);
 __decorateClass([n$6({
   type: Boolean,
@@ -21245,7 +21167,7 @@ var menu_label_styles_default = i$7`
 
 var SlMenuLabel = class extends ShoelaceElement {
   render() {
-    return x` <slot part="base" class="menu-label"></slot> `;
+    return b` <slot part="base" class="menu-label"></slot> `;
   }
 };
 SlMenuLabel.styles = [component_styles_default, menu_label_styles_default];
@@ -21414,7 +21336,7 @@ var SlOption = class extends ShoelaceElement {
     return label.trim();
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -21439,10 +21361,10 @@ SlOption.styles = [component_styles_default, option_styles_default];
 SlOption.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".option__label")], SlOption.prototype, "defaultSlot", 2);
-__decorateClass([r$3()], SlOption.prototype, "current", 2);
-__decorateClass([r$3()], SlOption.prototype, "selected", 2);
-__decorateClass([r$3()], SlOption.prototype, "hasHover", 2);
+__decorateClass([e$6(".option__label")], SlOption.prototype, "defaultSlot", 2);
+__decorateClass([r$4()], SlOption.prototype, "current", 2);
+__decorateClass([r$4()], SlOption.prototype, "selected", 2);
+__decorateClass([r$4()], SlOption.prototype, "hasHover", 2);
 __decorateClass([n$6({
   reflect: true
 })], SlOption.prototype, "value", 2);
@@ -22130,7 +22052,7 @@ var SlDrawer = class extends ShoelaceElement {
     return waitForEvent(this, "sl-after-hide");
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -22158,7 +22080,7 @@ var SlDrawer = class extends ShoelaceElement {
           aria-labelledby=${o$6(!this.noHeader ? "title" : void 0)}
           tabindex="0"
         >
-          ${!this.noHeader ? x`
+          ${!this.noHeader ? b`
                 <header part="header" class="drawer__header">
                   <h2 part="title" class="drawer__title" id="title">
                     <!-- If there's no label, use an invisible character to prevent the header from collapsing -->
@@ -22193,9 +22115,9 @@ SlDrawer.styles = [component_styles_default, drawer_styles_default];
 SlDrawer.dependencies = {
   "sl-icon-button": SlIconButton
 };
-__decorateClass([e$7(".drawer")], SlDrawer.prototype, "drawer", 2);
-__decorateClass([e$7(".drawer__panel")], SlDrawer.prototype, "panel", 2);
-__decorateClass([e$7(".drawer__overlay")], SlDrawer.prototype, "overlay", 2);
+__decorateClass([e$6(".drawer")], SlDrawer.prototype, "drawer", 2);
+__decorateClass([e$6(".drawer__panel")], SlDrawer.prototype, "panel", 2);
+__decorateClass([e$6(".drawer__overlay")], SlDrawer.prototype, "overlay", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -22716,7 +22638,7 @@ var SlDropdown = class extends ShoelaceElement {
     }
   }
   render() {
-    return x`
+    return b`
       <sl-popup
         part="base"
         exportparts="popup:base__popup"
@@ -22757,9 +22679,9 @@ SlDropdown.styles = [component_styles_default, dropdown_styles_default];
 SlDropdown.dependencies = {
   "sl-popup": SlPopup
 };
-__decorateClass([e$7(".dropdown")], SlDropdown.prototype, "popup", 2);
-__decorateClass([e$7(".dropdown__trigger")], SlDropdown.prototype, "trigger", 2);
-__decorateClass([e$7(".dropdown__panel")], SlDropdown.prototype, "panel", 2);
+__decorateClass([e$6(".dropdown")], SlDropdown.prototype, "popup", 2);
+__decorateClass([e$6(".dropdown__trigger")], SlDropdown.prototype, "trigger", 2);
+__decorateClass([e$6(".dropdown__panel")], SlDropdown.prototype, "panel", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -22849,7 +22771,7 @@ var SlFormatDate = class extends ShoelaceElement {
     if (isNaN(date.getMilliseconds())) {
       return void 0;
     }
-    return x`
+    return b`
       <time datetime=${date.toISOString()}>
         ${this.localize.date(date, {
       weekday: this.weekday,
@@ -23654,7 +23576,7 @@ var SlCarousel = class extends ShoelaceElement {
     const prevEnabled = this.canScrollPrev();
     const nextEnabled = this.canScrollNext();
     const isLtr = this.localize.dir() === "ltr";
-    return x`
+    return b`
       <div part="base" class="carousel">
         <div
           id="scroll-container"
@@ -23678,7 +23600,7 @@ var SlCarousel = class extends ShoelaceElement {
           <slot></slot>
         </div>
 
-        ${this.navigation ? x`
+        ${this.navigation ? b`
               <div part="navigation" class="carousel__navigation">
                 <button
                   part="navigation-button navigation-button--previous"
@@ -23715,11 +23637,11 @@ var SlCarousel = class extends ShoelaceElement {
                 </button>
               </div>
             ` : ""}
-        ${this.pagination ? x`
+        ${this.pagination ? b`
               <div part="pagination" role="tablist" class="carousel__pagination">
                 ${o$1(o(pagesCount), index => {
       const isActive = index === currentPage;
-      return x`
+      return b`
                     <button
                       part="pagination-item ${isActive ? "pagination-item--active" : ""}"
                       class="${e$3({
@@ -23781,11 +23703,11 @@ __decorateClass([n$6({
   reflect: true,
   attribute: "mouse-dragging"
 })], SlCarousel.prototype, "mouseDragging", 2);
-__decorateClass([e$7(".carousel__slides")], SlCarousel.prototype, "scrollContainer", 2);
-__decorateClass([e$7(".carousel__pagination")], SlCarousel.prototype, "paginationContainer", 2);
-__decorateClass([r$3()], SlCarousel.prototype, "activeSlide", 2);
-__decorateClass([r$3()], SlCarousel.prototype, "scrolling", 2);
-__decorateClass([r$3()], SlCarousel.prototype, "dragging", 2);
+__decorateClass([e$6(".carousel__slides")], SlCarousel.prototype, "scrollContainer", 2);
+__decorateClass([e$6(".carousel__pagination")], SlCarousel.prototype, "paginationContainer", 2);
+__decorateClass([r$4()], SlCarousel.prototype, "activeSlide", 2);
+__decorateClass([r$4()], SlCarousel.prototype, "scrolling", 2);
+__decorateClass([r$4()], SlCarousel.prototype, "dragging", 2);
 __decorateClass([t$2({
   passive: true
 })], SlCarousel.prototype, "handleScroll", 1);
@@ -23838,7 +23760,7 @@ var SlCarouselItem = class extends ShoelaceElement {
     super.connectedCallback();
   }
   render() {
-    return x` <slot></slot> `;
+    return b` <slot></slot> `;
   }
 };
 SlCarouselItem.styles = [component_styles_default, carousel_item_styles_default];
@@ -24381,9 +24303,9 @@ SlButton.dependencies = {
   "sl-icon": SlIcon,
   "sl-spinner": SlSpinner
 };
-__decorateClass([e$7(".button")], SlButton.prototype, "button", 2);
-__decorateClass([r$3()], SlButton.prototype, "hasFocus", 2);
-__decorateClass([r$3()], SlButton.prototype, "invalid", 2);
+__decorateClass([e$6(".button")], SlButton.prototype, "button", 2);
+__decorateClass([r$4()], SlButton.prototype, "hasFocus", 2);
+__decorateClass([r$4()], SlButton.prototype, "invalid", 2);
 __decorateClass([n$6()], SlButton.prototype, "title", 2);
 __decorateClass([n$6({
   reflect: true
@@ -26236,7 +26158,7 @@ var SlColorPicker = class extends ShoelaceElement {
     const gridHandleX = this.saturation;
     const gridHandleY = 100 - this.brightness;
     const swatches = Array.isArray(this.swatches) ? this.swatches : this.swatches.split(";").filter(color => color.trim() !== "");
-    const colorPicker = x`
+    const colorPicker = b`
       <div
         part="base"
         class=${e$3({
@@ -26249,7 +26171,7 @@ var SlColorPicker = class extends ShoelaceElement {
         aria-labelledby="label"
         tabindex=${this.inline ? "0" : "-1"}
       >
-        ${this.inline ? x`
+        ${this.inline ? b`
               <sl-visually-hidden id="label">
                 <slot name="label">${this.label}</slot>
               </sl-visually-hidden>
@@ -26307,7 +26229,7 @@ var SlColorPicker = class extends ShoelaceElement {
               ></span>
             </div>
 
-            ${this.opacity ? x`
+            ${this.opacity ? b`
                   <div
                     part="slider opacity-slider"
                     class="color-picker__alpha color-picker__slider color-picker__transparent-bg"
@@ -26377,7 +26299,7 @@ var SlColorPicker = class extends ShoelaceElement {
           ></sl-input>
 
           <sl-button-group>
-            ${!this.noFormatToggle ? x`
+            ${!this.noFormatToggle ? b`
                   <sl-button
                     part="format-button"
                     aria-label=${this.localize.term("toggleColorFormat")}
@@ -26395,7 +26317,7 @@ var SlColorPicker = class extends ShoelaceElement {
                     ${this.setLetterCase(this.format)}
                   </sl-button>
                 ` : ""}
-            ${hasEyeDropper ? x`
+            ${hasEyeDropper ? b`
                   <sl-button
                     part="eye-dropper-button"
                     exportparts="
@@ -26419,7 +26341,7 @@ var SlColorPicker = class extends ShoelaceElement {
           </sl-button-group>
         </div>
 
-        ${swatches.length > 0 ? x`
+        ${swatches.length > 0 ? b`
               <div part="swatches" class="color-picker__swatches">
                 ${swatches.map(swatch => {
       const parsedColor = this.parseColor(swatch);
@@ -26427,7 +26349,7 @@ var SlColorPicker = class extends ShoelaceElement {
         console.error(`Unable to parse swatch color: "${swatch}"`, this);
         return "";
       }
-      return x`
+      return b`
                     <div
                       part="swatch"
                       class="color-picker__swatch color-picker__transparent-bg"
@@ -26453,7 +26375,7 @@ var SlColorPicker = class extends ShoelaceElement {
     if (this.inline) {
       return colorPicker;
     }
-    return x`
+    return b`
       <sl-dropdown
         class="color-dropdown"
         aria-disabled=${this.disabled ? "true" : "false"}
@@ -26498,19 +26420,19 @@ SlColorPicker.dependencies = {
   "sl-input": SlInput,
   "sl-visually-hidden": SlVisuallyHidden
 };
-__decorateClass([e$7('[part~="base"]')], SlColorPicker.prototype, "base", 2);
-__decorateClass([e$7('[part~="input"]')], SlColorPicker.prototype, "input", 2);
-__decorateClass([e$7(".color-dropdown")], SlColorPicker.prototype, "dropdown", 2);
-__decorateClass([e$7('[part~="preview"]')], SlColorPicker.prototype, "previewButton", 2);
-__decorateClass([e$7('[part~="trigger"]')], SlColorPicker.prototype, "trigger", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "hasFocus", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "isDraggingGridHandle", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "isEmpty", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "inputValue", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "hue", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "saturation", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "brightness", 2);
-__decorateClass([r$3()], SlColorPicker.prototype, "alpha", 2);
+__decorateClass([e$6('[part~="base"]')], SlColorPicker.prototype, "base", 2);
+__decorateClass([e$6('[part~="input"]')], SlColorPicker.prototype, "input", 2);
+__decorateClass([e$6(".color-dropdown")], SlColorPicker.prototype, "dropdown", 2);
+__decorateClass([e$6('[part~="preview"]')], SlColorPicker.prototype, "previewButton", 2);
+__decorateClass([e$6('[part~="trigger"]')], SlColorPicker.prototype, "trigger", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "hasFocus", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "isDraggingGridHandle", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "isEmpty", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "inputValue", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "hue", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "saturation", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "brightness", 2);
+__decorateClass([r$4()], SlColorPicker.prototype, "alpha", 2);
 __decorateClass([n$6()], SlColorPicker.prototype, "value", 2);
 __decorateClass([defaultValue()], SlColorPicker.prototype, "defaultValue", 2);
 __decorateClass([n$6()], SlColorPicker.prototype, "label", 2);
@@ -26715,7 +26637,7 @@ var SlCopyButton = class extends ShoelaceElement {
   }
   render() {
     const copyLabel = this.copyLabel || this.localize.term("copy");
-    return x`
+    return b`
       <sl-tooltip
         class=${e$3({
       "copy-button": true,
@@ -26759,12 +26681,12 @@ SlCopyButton.dependencies = {
   "sl-icon": SlIcon,
   "sl-tooltip": SlTooltip
 };
-__decorateClass([e$7('slot[name="copy-icon"]')], SlCopyButton.prototype, "copyIcon", 2);
-__decorateClass([e$7('slot[name="success-icon"]')], SlCopyButton.prototype, "successIcon", 2);
-__decorateClass([e$7('slot[name="error-icon"]')], SlCopyButton.prototype, "errorIcon", 2);
-__decorateClass([e$7("sl-tooltip")], SlCopyButton.prototype, "tooltip", 2);
-__decorateClass([r$3()], SlCopyButton.prototype, "isCopying", 2);
-__decorateClass([r$3()], SlCopyButton.prototype, "status", 2);
+__decorateClass([e$6('slot[name="copy-icon"]')], SlCopyButton.prototype, "copyIcon", 2);
+__decorateClass([e$6('slot[name="success-icon"]')], SlCopyButton.prototype, "successIcon", 2);
+__decorateClass([e$6('slot[name="error-icon"]')], SlCopyButton.prototype, "errorIcon", 2);
+__decorateClass([e$6("sl-tooltip")], SlCopyButton.prototype, "tooltip", 2);
+__decorateClass([r$4()], SlCopyButton.prototype, "isCopying", 2);
+__decorateClass([r$4()], SlCopyButton.prototype, "status", 2);
 __decorateClass([n$6()], SlCopyButton.prototype, "value", 2);
 __decorateClass([n$6()], SlCopyButton.prototype, "from", 2);
 __decorateClass([n$6({
@@ -27035,7 +26957,7 @@ var SlDetails = class extends ShoelaceElement {
   }
   render() {
     const isRtl = this.localize.dir() === "rtl";
-    return x`
+    return b`
       <details
         part="base"
         class=${e$3({
@@ -27080,10 +27002,10 @@ SlDetails.styles = [component_styles_default, details_styles_default];
 SlDetails.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".details")], SlDetails.prototype, "details", 2);
-__decorateClass([e$7(".details__header")], SlDetails.prototype, "header", 2);
-__decorateClass([e$7(".details__body")], SlDetails.prototype, "body", 2);
-__decorateClass([e$7(".details__expand-icon-slot")], SlDetails.prototype, "expandIconSlot", 2);
+__decorateClass([e$6(".details")], SlDetails.prototype, "details", 2);
+__decorateClass([e$6(".details__header")], SlDetails.prototype, "header", 2);
+__decorateClass([e$6(".details__body")], SlDetails.prototype, "body", 2);
+__decorateClass([e$6(".details__expand-icon-slot")], SlDetails.prototype, "expandIconSlot", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -27405,7 +27327,7 @@ var SlDialog = class extends ShoelaceElement {
     return waitForEvent(this, "sl-after-hide");
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -27426,7 +27348,7 @@ var SlDialog = class extends ShoelaceElement {
           aria-labelledby=${o$6(!this.noHeader ? "title" : void 0)}
           tabindex="-1"
         >
-          ${!this.noHeader ? x`
+          ${!this.noHeader ? b`
                 <header part="header" class="dialog__header">
                   <h2 part="title" class="dialog__title" id="title">
                     <slot name="label"> ${this.label.length > 0 ? this.label : String.fromCharCode(65279)} </slot>
@@ -27460,9 +27382,9 @@ SlDialog.styles = [component_styles_default, dialog_styles_default];
 SlDialog.dependencies = {
   "sl-icon-button": SlIconButton
 };
-__decorateClass([e$7(".dialog")], SlDialog.prototype, "dialog", 2);
-__decorateClass([e$7(".dialog__panel")], SlDialog.prototype, "panel", 2);
-__decorateClass([e$7(".dialog__overlay")], SlDialog.prototype, "overlay", 2);
+__decorateClass([e$6(".dialog")], SlDialog.prototype, "dialog", 2);
+__decorateClass([e$6(".dialog__panel")], SlDialog.prototype, "panel", 2);
+__decorateClass([e$6(".dialog__overlay")], SlDialog.prototype, "overlay", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -27644,7 +27566,7 @@ var SlAnimatedImage = class extends ShoelaceElement {
     this.isLoaded = false;
   }
   render() {
-    return x`
+    return b`
       <div class="animated-image">
         <img
           class="animated-image__animated"
@@ -27657,7 +27579,7 @@ var SlAnimatedImage = class extends ShoelaceElement {
           @error=${this.handleError}
         />
 
-        ${this.isLoaded ? x`
+        ${this.isLoaded ? b`
               <img
                 class="animated-image__frozen"
                 src=${this.frozenFrame}
@@ -27679,9 +27601,9 @@ SlAnimatedImage.styles = [component_styles_default, animated_image_styles_defaul
 SlAnimatedImage.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7(".animated-image__animated")], SlAnimatedImage.prototype, "animatedImage", 2);
-__decorateClass([r$3()], SlAnimatedImage.prototype, "frozenFrame", 2);
-__decorateClass([r$3()], SlAnimatedImage.prototype, "isLoaded", 2);
+__decorateClass([e$6(".animated-image__animated")], SlAnimatedImage.prototype, "animatedImage", 2);
+__decorateClass([r$4()], SlAnimatedImage.prototype, "frozenFrame", 2);
+__decorateClass([r$4()], SlAnimatedImage.prototype, "isLoaded", 2);
 __decorateClass([n$6()], SlAnimatedImage.prototype, "src", 2);
 __decorateClass([n$6()], SlAnimatedImage.prototype, "alt", 2);
 __decorateClass([n$6({
@@ -29400,11 +29322,11 @@ var SlAnimation = class extends ShoelaceElement {
     (_a = this.animation) == null ? void 0 : _a.finish();
   }
   render() {
-    return x` <slot @slotchange=${this.handleSlotChange}></slot> `;
+    return b` <slot @slotchange=${this.handleSlotChange}></slot> `;
   }
 };
 SlAnimation.styles = [component_styles_default, animation_styles_default];
-__decorateClass([r$2("slot")], SlAnimation.prototype, "defaultSlot", 2);
+__decorateClass([r$3("slot")], SlAnimation.prototype, "defaultSlot", 2);
 __decorateClass([n$6()], SlAnimation.prototype, "name", 2);
 __decorateClass([n$6({
   type: Boolean,
@@ -29539,7 +29461,7 @@ var SlAvatar = class extends ShoelaceElement {
     this.emit("sl-error");
   }
   render() {
-    const avatarWithImage = x`
+    const avatarWithImage = b`
       <img
         part="image"
         class="avatar__image"
@@ -29549,11 +29471,11 @@ var SlAvatar = class extends ShoelaceElement {
         @error="${this.handleImageLoadError}"
       />
     `;
-    let avatarWithoutImage = x``;
+    let avatarWithoutImage = b``;
     if (this.initials) {
-      avatarWithoutImage = x`<div part="initials" class="avatar__initials">${this.initials}</div>`;
+      avatarWithoutImage = b`<div part="initials" class="avatar__initials">${this.initials}</div>`;
     } else {
-      avatarWithoutImage = x`
+      avatarWithoutImage = b`
         <div part="icon" class="avatar__icon" aria-hidden="true">
           <slot name="icon">
             <sl-icon name="person-fill" library="system"></sl-icon>
@@ -29561,7 +29483,7 @@ var SlAvatar = class extends ShoelaceElement {
         </div>
       `;
     }
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -29582,7 +29504,7 @@ SlAvatar.styles = [component_styles_default, avatar_styles_default];
 SlAvatar.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([r$3()], SlAvatar.prototype, "hasError", 2);
+__decorateClass([r$4()], SlAvatar.prototype, "hasError", 2);
 __decorateClass([n$6()], SlAvatar.prototype, "image", 2);
 __decorateClass([n$6()], SlAvatar.prototype, "label", 2);
 __decorateClass([n$6()], SlAvatar.prototype, "initials", 2);
@@ -29654,7 +29576,7 @@ var SlBreadcrumb = class extends ShoelaceElement {
       this.separatorDir = this.localize.dir();
       this.updateComplete.then(() => this.handleSlotChange());
     }
-    return x`
+    return b`
       <nav part="base" class="breadcrumb" aria-label=${this.label}>
         <slot @slotchange=${this.handleSlotChange}></slot>
       </nav>
@@ -29671,8 +29593,8 @@ SlBreadcrumb.styles = [component_styles_default, breadcrumb_styles_default];
 SlBreadcrumb.dependencies = {
   "sl-icon": SlIcon
 };
-__decorateClass([e$7("slot")], SlBreadcrumb.prototype, "defaultSlot", 2);
-__decorateClass([e$7('slot[name="separator"]')], SlBreadcrumb.prototype, "separatorSlot", 2);
+__decorateClass([e$6("slot")], SlBreadcrumb.prototype, "defaultSlot", 2);
+__decorateClass([e$6('slot[name="separator"]')], SlBreadcrumb.prototype, "separatorSlot", 2);
 __decorateClass([n$6()], SlBreadcrumb.prototype, "label", 2);
 
 var tagName$5 = "sl-breadcrumb";
@@ -29813,7 +29735,7 @@ var SlBreadcrumbItem = class extends ShoelaceElement {
     this.setRenderType();
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -29826,7 +29748,7 @@ var SlBreadcrumbItem = class extends ShoelaceElement {
           <slot name="prefix"></slot>
         </span>
 
-        ${this.renderType === "link" ? x`
+        ${this.renderType === "link" ? b`
               <a
                 part="label"
                 class="breadcrumb-item__label breadcrumb-item__label--link"
@@ -29837,12 +29759,12 @@ var SlBreadcrumbItem = class extends ShoelaceElement {
                 <slot @slotchange=${this.handleSlotChange}></slot>
               </a>
             ` : ""}
-        ${this.renderType === "button" ? x`
+        ${this.renderType === "button" ? b`
               <button part="label" type="button" class="breadcrumb-item__label breadcrumb-item__label--button">
                 <slot @slotchange=${this.handleSlotChange}></slot>
               </button>
             ` : ""}
-        ${this.renderType === "dropdown" ? x`
+        ${this.renderType === "dropdown" ? b`
               <div part="label" class="breadcrumb-item__label breadcrumb-item__label--drop-down">
                 <slot @slotchange=${this.handleSlotChange}></slot>
               </div>
@@ -29860,8 +29782,8 @@ var SlBreadcrumbItem = class extends ShoelaceElement {
   }
 };
 SlBreadcrumbItem.styles = [component_styles_default, breadcrumb_item_styles_default];
-__decorateClass([e$7("slot:not([name])")], SlBreadcrumbItem.prototype, "defaultSlot", 2);
-__decorateClass([r$3()], SlBreadcrumbItem.prototype, "renderType", 2);
+__decorateClass([e$6("slot:not([name])")], SlBreadcrumbItem.prototype, "defaultSlot", 2);
+__decorateClass([r$4()], SlBreadcrumbItem.prototype, "renderType", 2);
 __decorateClass([n$6()], SlBreadcrumbItem.prototype, "href", 2);
 __decorateClass([n$6()], SlBreadcrumbItem.prototype, "target", 2);
 __decorateClass([n$6()], SlBreadcrumbItem.prototype, "rel", 2);
@@ -29979,7 +29901,7 @@ var SlBadge = class extends ShoelaceElement {
     this.pulse = false;
   }
   render() {
-    return x`
+    return b`
       <span
         part="base"
         class=${e$3({
@@ -30096,7 +30018,7 @@ var SlCard = class extends ShoelaceElement {
     this.hasSlotController = new HasSlotController(this, "footer", "header", "image");
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -30419,7 +30341,7 @@ var _SlAlert = class _SlAlert extends ShoelaceElement {
     });
   }
   render() {
-    return x`
+    return b`
       <div
         part="base"
         class=${e$3({
@@ -30447,7 +30369,7 @@ var _SlAlert = class _SlAlert extends ShoelaceElement {
           <slot></slot>
         </div>
 
-        ${this.closable ? x`
+        ${this.closable ? b`
               <sl-icon-button
                 part="close-button"
                 exportparts="base:close-button__base"
@@ -30461,7 +30383,7 @@ var _SlAlert = class _SlAlert extends ShoelaceElement {
 
         <div role="timer" class="alert__timer">${this.remainingTime}</div>
 
-        ${this.countdown ? x`
+        ${this.countdown ? b`
               <div
                 class=${e$3({
       alert__countdown: true,
@@ -30479,8 +30401,8 @@ _SlAlert.styles = [component_styles_default, alert_styles_default];
 _SlAlert.dependencies = {
   "sl-icon-button": SlIconButton
 };
-__decorateClass([e$7('[part~="base"]')], _SlAlert.prototype, "base", 2);
-__decorateClass([e$7(".alert__countdown-elapsed")], _SlAlert.prototype, "countdownElement", 2);
+__decorateClass([e$6('[part~="base"]')], _SlAlert.prototype, "base", 2);
+__decorateClass([e$6(".alert__countdown-elapsed")], _SlAlert.prototype, "countdownElement", 2);
 __decorateClass([n$6({
   type: Boolean,
   reflect: true
@@ -30499,7 +30421,7 @@ __decorateClass([n$6({
   type: String,
   reflect: true
 })], _SlAlert.prototype, "countdown", 2);
-__decorateClass([r$3()], _SlAlert.prototype, "remainingTime", 2);
+__decorateClass([r$4()], _SlAlert.prototype, "remainingTime", 2);
 __decorateClass([watch("open", {
   waitUntilFirstUpdate: true
 })], _SlAlert.prototype, "handleOpenChange", 1);
@@ -30647,7 +30569,7 @@ var hasRequiredScheduler_production;
 function requireScheduler_production () {
 	if (hasRequiredScheduler_production) return scheduler_production;
 	hasRequiredScheduler_production = 1;
-	(function (exports) {
+	(function (exports$1) {
 
 		function push(heap, node) {
 		  var index = heap.length;
@@ -30681,16 +30603,16 @@ function requireScheduler_production () {
 		  var diff = a.sortIndex - b.sortIndex;
 		  return 0 !== diff ? diff : a.id - b.id;
 		}
-		exports.unstable_now = void 0;
+		exports$1.unstable_now = void 0;
 		if ("object" === typeof performance && "function" === typeof performance.now) {
 		  var localPerformance = performance;
-		  exports.unstable_now = function () {
+		  exports$1.unstable_now = function () {
 		    return localPerformance.now();
 		  };
 		} else {
 		  var localDate = Date,
 		    initialTime = localDate.now();
-		  exports.unstable_now = function () {
+		  exports$1.unstable_now = function () {
 		    return localDate.now() - initialTime;
 		  };
 		}
@@ -30725,12 +30647,12 @@ function requireScheduler_production () {
 		  frameInterval = 5,
 		  startTime = -1;
 		function shouldYieldToHost() {
-		  return needsPaint ? true : exports.unstable_now() - startTime < frameInterval ? false : true;
+		  return needsPaint ? true : exports$1.unstable_now() - startTime < frameInterval ? false : true;
 		}
 		function performWorkUntilDeadline() {
 		  needsPaint = false;
 		  if (isMessageLoopRunning) {
-		    var currentTime = exports.unstable_now();
+		    var currentTime = exports$1.unstable_now();
 		    startTime = currentTime;
 		    var hasMoreWork = true;
 		    try {
@@ -30748,7 +30670,7 @@ function requireScheduler_production () {
 		                currentTask.callback = null;
 		                currentPriorityLevel = currentTask.priorityLevel;
 		                var continuationCallback = callback(currentTask.expirationTime <= currentTime);
-		                currentTime = exports.unstable_now();
+		                currentTime = exports$1.unstable_now();
 		                if ("function" === typeof continuationCallback) {
 		                  currentTask.callback = continuationCallback;
 		                  advanceTimers(currentTime);
@@ -30792,25 +30714,25 @@ function requireScheduler_production () {
 		};
 		function requestHostTimeout(callback, ms) {
 		  taskTimeoutID = localSetTimeout(function () {
-		    callback(exports.unstable_now());
+		    callback(exports$1.unstable_now());
 		  }, ms);
 		}
-		exports.unstable_IdlePriority = 5;
-		exports.unstable_ImmediatePriority = 1;
-		exports.unstable_LowPriority = 4;
-		exports.unstable_NormalPriority = 3;
-		exports.unstable_Profiling = null;
-		exports.unstable_UserBlockingPriority = 2;
-		exports.unstable_cancelCallback = function (task) {
+		exports$1.unstable_IdlePriority = 5;
+		exports$1.unstable_ImmediatePriority = 1;
+		exports$1.unstable_LowPriority = 4;
+		exports$1.unstable_NormalPriority = 3;
+		exports$1.unstable_Profiling = null;
+		exports$1.unstable_UserBlockingPriority = 2;
+		exports$1.unstable_cancelCallback = function (task) {
 		  task.callback = null;
 		};
-		exports.unstable_forceFrameRate = function (fps) {
+		exports$1.unstable_forceFrameRate = function (fps) {
 		  0 > fps || 125 < fps ? console.error("forceFrameRate takes a positive int between 0 and 125, forcing frame rates higher than 125 fps is not supported") : frameInterval = 0 < fps ? Math.floor(1e3 / fps) : 5;
 		};
-		exports.unstable_getCurrentPriorityLevel = function () {
+		exports$1.unstable_getCurrentPriorityLevel = function () {
 		  return currentPriorityLevel;
 		};
-		exports.unstable_next = function (eventHandler) {
+		exports$1.unstable_next = function (eventHandler) {
 		  switch (currentPriorityLevel) {
 		    case 1:
 		    case 2:
@@ -30828,10 +30750,10 @@ function requireScheduler_production () {
 		    currentPriorityLevel = previousPriorityLevel;
 		  }
 		};
-		exports.unstable_requestPaint = function () {
+		exports$1.unstable_requestPaint = function () {
 		  needsPaint = true;
 		};
-		exports.unstable_runWithPriority = function (priorityLevel, eventHandler) {
+		exports$1.unstable_runWithPriority = function (priorityLevel, eventHandler) {
 		  switch (priorityLevel) {
 		    case 1:
 		    case 2:
@@ -30850,8 +30772,8 @@ function requireScheduler_production () {
 		    currentPriorityLevel = previousPriorityLevel;
 		  }
 		};
-		exports.unstable_scheduleCallback = function (priorityLevel, callback, options) {
-		  var currentTime = exports.unstable_now();
+		exports$1.unstable_scheduleCallback = function (priorityLevel, callback, options) {
+		  var currentTime = exports$1.unstable_now();
 		  "object" === typeof options && null !== options ? (options = options.delay, options = "number" === typeof options && 0 < options ? currentTime + options : currentTime) : options = currentTime;
 		  switch (priorityLevel) {
 		    case 1:
@@ -30881,8 +30803,8 @@ function requireScheduler_production () {
 		  options > currentTime ? (priorityLevel.sortIndex = options, push(timerQueue, priorityLevel), null === peek(taskQueue) && priorityLevel === peek(timerQueue) && (isHostTimeoutScheduled ? (localClearTimeout(taskTimeoutID), taskTimeoutID = -1) : isHostTimeoutScheduled = true, requestHostTimeout(handleTimeout, options - currentTime))) : (priorityLevel.sortIndex = timeout, push(taskQueue, priorityLevel), isHostCallbackScheduled || isPerformingWork || (isHostCallbackScheduled = true, isMessageLoopRunning || (isMessageLoopRunning = true, schedulePerformWorkUntilDeadline())));
 		  return priorityLevel;
 		};
-		exports.unstable_shouldYield = shouldYieldToHost;
-		exports.unstable_wrapCallback = function (callback) {
+		exports$1.unstable_shouldYield = shouldYieldToHost;
+		exports$1.unstable_wrapCallback = function (callback) {
 		  var parentPriorityLevel = currentPriorityLevel;
 		  return function () {
 		    var previousPriorityLevel = currentPriorityLevel;
